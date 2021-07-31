@@ -2,8 +2,9 @@
 # -*- coding: UTF-8 -*-
 
 import sys
-sys.path.insert(0, '/home/panz/yi_lab/workspace/iDARTS/src/scripts/github/iDARTSCNN/')
 import os
+HOME_DIRECTORY = os.path.abspath(os.path.join(os.path.abspath(__file__), '../../'))
+sys.path.insert(0, HOME_DIRECTORY)
 import logging
 import argparse as ap
 import datetime
