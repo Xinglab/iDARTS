@@ -1,0 +1,157 @@
+#!/usr/bin/env python
+# -*- coding: UTF-8 -*-
+
+import sys
+sys.path.insert(0, '/home/panz/yi_lab/workspace/iDARTS/src/scripts/github/iDARTSCNN/')
+import os
+import logging
+import argparse as ap
+import datetime
+import yaml
+from iDARTS import config
+
+__author__ = 'Zhicheng Pan'
+__version__ = config.CURRENT_VERSION
+__email__ = 'zc.pan@ucla.edu'
+
+def setup_logger():
+    """Set up the logger for the whole pipeline
+    Args
+        None
+    Returns
+        logger: logging object
+    """
+    # setup logger
+    logger = logging.getLogger('iDARTS')
+    logger.setLevel(logging.INFO)
+    # create file handler which logs even debug messages
+    fh = logging.FileHandler('log.iDARTS.txt')
+    fh.setLevel(logging.INFO)
+    # create console handler with a higher log level
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    # create formatter and add it to the handlers
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s -\n %(message)s')
+    fh.setFormatter(formatter)
+    ch.setFormatter(formatter)
+    # add the handlers to the logger
+    logger.addHandler(fh)
+    logger.addHandler(ch)
+    return logger
+
+def add_get_resources_parser( subparsers ):
+    ag_get_resources = subparsers.add_parser("get_resources", help="iDARTS get_resources: connects online to get hg19 fasta and phastCons score")
+    
+    ag_get_resources.add_argument("-o", "--out-dir", dest="out_dir", type=str, required=False,
+        help="Optional, default user home directory: Output folder for downloaded data")
+
+    return
+
+def add_build_feature_parser( subparsers ):
+    ag_build_feature = subparsers.add_parser("build_feature", help="iDARTS build_feature: build feature file given required information")
+
+    ag_build_feature.add_argument("-t", "--type", dest="event_type", type=str, required=False,
+        default='SE', choices=['SE', 'A5SS', 'A3SS', 'RI'],
+        help="Optional, default SE: specify the alternative splicing event type. SE: skipped exons, A3SS: alternative 3 splice sites, A5SS: alternative 5 splice sites, RI: retained introns")
+
+    ag_build_feature.add_argument("-i", "--input", dest="input", type=str, required=True,
+        help="A list of alternative splicing events; iDARTS build feature output")
+
+    ag_build_feature.add_argument("-m", "--mutate", dest="mutate", type=str, required=False,
+        default = 'False', choices = ['True', 'False'], 
+        help="Annotate the sequence features with SNV (300nt within exon-intron boundary or on exons)")
+
+    ag_build_feature.add_argument("-o", "--out-file-name", dest="output", type=str, required=True,
+        help="Annotation output file name")
+
+def add_predict_parser( subparsers ):
+    ag_predict = subparsers.add_parser("predict", help="iDARTS predict: predict given required information")
+
+    ag_predict.add_argument("-t", "--type", dest="event_type", type=str, required=False,
+        default='SE', choices=['SE', 'A5SS', 'A3SS', 'RI'],
+        help="Optional, default SE: specify the alternative splicing event type. SE: skipped exons, A3SS: alternative 3 splice sites, A5SS: alternative 5 splice sites, RI: retained introns")
+
+    ag_predict.add_argument("-i", "--input", dest="input", type=str, required=True,
+        help="A list of alternative splicing events; iDARTS build feature")
+
+    ag_predict.add_argument("-e", "--expression", dest="expr", type=str, required=False,
+        help="Expressing file (TPM value from Kallisto);header format 'Gene_ID\\tExp1,Exp2,Exp3...(different expression profiles separated by comma)'")
+
+    ag_predict.add_argument("-o", "--out-file-name", dest="output", type=str, required=True,
+        help="Annotation output file name")
+
+def add_parse_vcf( subparsers ):
+    ag_parse_vcf = subparsers.add_parser("parse_vcf", help="iDARTS parse_vcf: mapping SNV to alternative splicing event given vcf file")
+
+    ag_parse_vcf.add_argument("-t", "--type", dest="event_type", type=str, required=False,
+        default='SE', choices=['SE', 'A5SS', 'A3SS', 'RI'],
+        help="Optional, default SE: specify the alternative splicing event type. SE: skipped exons, A3SS: alternative 3 splice sites, A5SS: alternative 5 splice sites, RI: retained introns")
+
+    ag_parse_vcf.add_argument("-i", "--input", dest="input", type=str, required=True,
+        help="A list of alternative splicing events; iDARTS parse SNVs from vcf for alternative splicing events")
+
+    ag_parse_vcf.add_argument("-v", "--vcf_path", dest="vcf_path", type=str, required=True,
+        help="vcf path")
+
+    ag_parse_vcf.add_argument("-o", "--out-file-name", dest="output", type=str, required=True,
+        help="parsed vcf output file name")
+
+def get_arg_parser():
+    """DOCSTRING
+    Args
+    Returns
+    """
+    description = "%(prog)s - individualized Deep-learning Analysis of RNA Transcript Splicing"
+    epilog = "For command line options of each sub-command, type: %(prog)s COMMAND -h"
+    
+    argparser = ap.ArgumentParser(description=description, epilog=epilog)
+    argparser.add_argument("--version", action="version", version="%(prog)s "+__version__)
+    
+    subparsers = argparser.add_subparsers(dest="subcommand")
+
+    # get data
+    add_get_resources_parser( subparsers )
+
+    # build feature
+    add_build_feature_parser( subparsers )
+    
+    # predict
+    add_predict_parser( subparsers )
+
+    # parse vcf
+    add_parse_vcf( subparsers )
+    
+    return argparser
+
+def main():
+    argparser = get_arg_parser()
+    args = argparser.parse_args()
+    
+    subcommand = args.subcommand
+
+    if subcommand == 'get_resources':
+        logger = setup_logger()
+        from iDARTS import get_resources
+        get_resources.parser(args)
+
+    if subcommand == 'build_feature':
+        logger = setup_logger()
+        from iDARTS import build_feature
+        build_feature.parser(args)
+
+    if subcommand == 'predict':
+        logger = setup_logger()
+        from iDARTS import iDARTS_pred
+        iDARTS_pred.parser(args)
+
+    if subcommand == 'parse_vcf':
+        logger = setup_logger()
+        from iDARTS import parse_vcf
+        parse_vcf.parser(args)
+
+if __name__ == '__main__':
+    try:
+        main()
+    except KeyboardInterrupt:
+        sys.stderr.write("User interrupted; program terminated.")
+        sys.exit(0)
