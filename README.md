@@ -99,7 +99,7 @@ predict
 
 Zhicheng Pan <zc.pan@ucla.edu>
 
-Yi Xing <yxing@ucla.edu>
+Yi Xing <Yi.Xing@pennmedicine.upenn.edu>
 
 ### Copyright and License Information
 Copyright (C) 2021 Children’s Hospital of Philadelphia, University of Pennsylvania Yi Xing
