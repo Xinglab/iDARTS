@@ -95,7 +95,7 @@ predict
 ### Contact
 [Mailing List](mailto:idarts-user-group@googlegroups.com) / [Group](https://groups.google.com/d/forum/idarts-user-group)
 
-[GitHub Issues](https://github.com/Xinglab/DARTS/issues)
+[GitHub Issues](https://github.com/Xinglab/iDARTS/issues)
 
 Zhicheng Pan <zc.pan@ucla.edu>
 
