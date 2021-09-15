@@ -8,7 +8,7 @@
 - [Contact](#contact)
 - [Copyright and License Information](#copyright-and-license-information)
 
-### Installation (placeholder)
+### Installation (Under development)
 The installation is made easy through [Anaconda](https://anaconda.org/idarts).
 
 ```bash

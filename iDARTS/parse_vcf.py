@@ -26,7 +26,7 @@ def get_file_num_lines(filename):
     fp.close()
     return count
 
-def parse_vcf_SE(args):
+def parse_vcf_SE(args): # parse vcf files for exon skipping events
     input_fn = args.input
     output_fn = args.output
     vcf_path = args.vcf_path
@@ -63,7 +63,7 @@ def parse_vcf_SE(args):
                     _ref = record.REF
                     _alt = str(record.ALT[0])
                     _rs = record.ID
-                    if _pos in pos_list or not fall_in_interval(_pos, interval):
+                    if not fall_in_interval(_pos, interval):
                         continue
                     pos_list.append(_pos)
                     ref_list.append(_ref)
@@ -75,15 +75,18 @@ def parse_vcf_SE(args):
         output_line = '\t'.join(sp[1:])
         if len(pos_list) == 0:
             continue
+        out_line_list = []
         for rs, pos, ref, alt in zip(rs_list, pos_list, ref_list, alt_list):
             rsID = '{}_{}_{}_{}_b37'.format(chrom.replace('chr', ''), pos + 1, ref, alt)
             ID = '|'.join(sp[3:11]) + '@' + rsID
             annotate_snp_info = '{}\t{}\t{}\t{}'.format(rs, pos, ref, alt)
-            fw.write(ID + '\t' + output_line + '\t' + annotate_snp_info + '\n')
+            out_line_list.append(ID + '\t' + output_line + '\t' + annotate_snp_info)
+        out_line_list = sorted(list(set(out_line_list)))
+        fw.write('\n'.join(out_line_list) + '\n')
     fp.close()
     fw.close()
 
-def parse_vcf_ASS(args):
+def parse_vcf_ASS(args): # parse vcf files for alternative 3' or 5' splicing events
     input_fn = args.input
     output_fn = args.output
     vcf_path = args.vcf_path
@@ -131,7 +134,7 @@ def parse_vcf_ASS(args):
                     _ref = record.REF
                     _alt = str(record.ALT[0])
                     _rs = record.ID
-                    if _pos in pos_list or not fall_in_interval(_pos, interval):
+                    if not fall_in_interval(_pos, interval):
                         continue
                     pos_list.append(_pos)
                     ref_list.append(_ref)
@@ -143,11 +146,14 @@ def parse_vcf_ASS(args):
         output_line = '\t'.join(sp[1:])
         if len(pos_list) == 0:
             continue
+        out_line_list = []
         for rs, pos, ref, alt in zip(rs_list, pos_list, ref_list, alt_list):
             rsID = '{}_{}_{}_{}_b37'.format(chrom.replace('chr', ''), pos + 1, ref, alt)
             ID = '|'.join(sp[3:11]) + '@' + rsID
             annotate_snp_info = '{}\t{}\t{}\t{}'.format(rs, pos, ref, alt)
-            fw.write(ID + '\t' + output_line + '\t' + annotate_snp_info + '\n')
+            out_line_list.append(ID + '\t' + output_line + '\t' + annotate_snp_info)
+        out_line_list = sorted(list(set(out_line_list)))
+        fw.write('\n'.join(out_line_list) + '\n')
     fp.close()
     fw.close()
 
@@ -159,6 +165,10 @@ def parser(args):
     if event_type == 'SE':
         parse_vcf_SE(args)
     if event_type == 'RI':
-        parse_vcf_RI(args)
+        #parse_vcf_RI(args)
+        logger.info('RI still under development')
+        sys.exit(0)
     if event_type == 'A3SS' or event_type == 'A5SS':
-        parse_vcf_ASS(args)
+        #parse_vcf_ASS(args)
+        logger.info('A3SS and A5SS still under development')
+        sys.exit(0)
