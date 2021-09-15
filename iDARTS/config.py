@@ -14,4 +14,4 @@ MODEL_DIR = resource_filename('iDARTS.resources', 'model')
 RBP_LIST_FN = resource_filename('iDARTS.resources', 'RBP.GeneName.txt')
 DOWNLOAD_CONFIG = yaml.safe_load(open(resource_filename('iDARTS.resources', 'download.yaml'), 'r'))
 CHECK_MD5_CONFIG = yaml.safe_load(open(resource_filename('iDARTS.resources', 'check_md5.yaml'), 'r'))
-iDARTS_DIRECTORY = os.path.expanduser('~') + '/yi_lab/backup/.iDARTS/'
+iDARTS_DIRECTORY = os.path.expanduser('~') + '/.iDARTS/'
