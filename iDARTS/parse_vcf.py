@@ -5,6 +5,7 @@ iDARTS - parse_vcf
 """
 
 import os
+import sys
 from . import config
 from cyvcf2 import VCF
 from tqdm import tqdm
