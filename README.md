@@ -43,7 +43,7 @@ parse_vcf
                           Optional, default SE: specify the alternative splicing
                           event type. SE: skipped exons, A3SS: alternative 3
                           splice sites, A5SS: alternative 5 splice sites, RI:
-                          retained introns
+                          retained introns. A5SS, A3SS, and RI are under development.
     -i INPUT, --input INPUT
                           A list of alternative splicing events; iDARTS parse
                           SNVs from vcf for alternative splicing events
