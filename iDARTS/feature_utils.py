@@ -14,7 +14,6 @@ import regex as re
 from collections import defaultdict
 from skimage.util.shape import view_as_windows
 from collections import Counter
-from maxentpy import maxent_fast
 import pandas as pd
 from subprocess import *
 from tqdm import tqdm
