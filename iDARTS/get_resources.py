@@ -120,6 +120,7 @@ def parser(args):
     resources_download_flag = check_resources_md5(outdir)
     if not resources_download_flag:
         download_resources(outdir)
+        resources_download_flag = check_resources_md5(outdir)
     if resources_download_flag:
         logger.info('resource download successfully')
         resource_config = iDARTS_DIRECTORY + 'resource.yaml'
