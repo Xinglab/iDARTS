@@ -301,8 +301,6 @@ def build_feature(input_file, event_type, output_file, mutate):
     dict_alu_counts = load_alu_counts(iDARTStmp_dir + 'event.{}.alu'.format(event_type))
     dict_ESE_matrix = load_ESE_matrix_PSSM()
     splice_feature_list = load_splice_feature_list(splice_feature_fn)
-    donor_maxent_matrix = maxent_fast.load_matrix(5)
-    acceptor_maxent_matrix = maxent_fast.load_matrix(3)
     acceptor_cnn, donor_cnn = load_cnn_splice_predictor()
     esr_matrix = load_esr_matrix()
     rosenberg_matrix = load_rosenberg_matrix()
