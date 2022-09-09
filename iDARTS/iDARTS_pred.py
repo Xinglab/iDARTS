@@ -2,7 +2,7 @@
 
 """
 iDARTS - predict
-Predict splicing given sequence features and expression profiles
+Predict splicing levels given sequence features and expression profiles
 """
 
 import os
@@ -99,9 +99,7 @@ def make_prediction(args):
     num_lines = get_file_num_lines(input_file) - 1
     fp = open(input_file)
     header = fp.readline().strip().split('\t')
-    if event_type == 'A3SS' or event_type == 'A5SS' or event_type == 'RI':
-        logger.info('A3SS, A5SS, and RI still under development')
-        sys.exit(0)
+    if event_type == 'A3SS' or event_type == 'A5SS':
         feature_start_idx = header.index('9G8.C_F')
     else:
         feature_start_idx = header.index('LogLen.C1')

@@ -1,0 +1,21 @@
+##fileformat=VCFv4.2
+##contig=<ID=2,length=243199373>
+##contig=<ID=5,length=180915260>
+##contig=<ID=8,length=146364022>
+##contig=<ID=11,length=135006516>
+##contig=<ID=13,length=115169878>
+##contig=<ID=14,length=107349540>
+##contig=<ID=16,length=90354753>
+##contig=<ID=X,length=155270560>
+##reference=GRCh37/hg19
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+13	52535985	13_52535985_A_C_b37	A	C	.	.	.
+2	166854706	2_166854706_G_C_b37	G	C	.	.	.
+11	47369212	11_47369212_G_C_b37	G	C	.	.	.
+2	110905531	2_110905531_C_T_b37	C	T	.	.	.
+16	2098764	16_2098764_C_G_b37	C	G	.	.	.
+X	135112295	X_135112295_G_A_b37	G	A	.	.	.
+11	94219111	11_94219111_G_A_b37	G	A	.	.	.
+5	112102045	5_112102045_G_T_b37	G	T	.	.	.
+14	73637762	14_73637762_A_G_b37	A	G	.	.	.
+8	68066380	8_68066380_C_G_b37	C	G	.	.	.

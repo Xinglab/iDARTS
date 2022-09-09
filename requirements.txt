@@ -1,0 +1,15 @@
+python==2.7
+viennarna==2.2.10
+tensorflow==1.9.0
+keras==2.2.4
+bedtools
+pysam
+pandas
+regex
+pyyaml
+pyBigWig
+scikit-image
+cyvcf2
+psutil
+joblib
+tqdm

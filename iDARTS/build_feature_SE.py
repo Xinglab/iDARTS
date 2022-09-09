@@ -1,17 +1,17 @@
 # -*- coding: UTF-8 -*-
 
 """
-iDARTS - get_resources
-Implements an internal downloading module for 
-getting data from internet. Data includes training
-data, cis feature files, etc.
-This module depends on the url and md5sum stored in ``resources/download.yaml``
+iDARTS - build_feature_SE
+Implements a splicing feature build module for 
+constructing exon skipping features
 """
+
 from subprocess import *
 from collections import defaultdict
 from pkg_resources import resource_filename
 import time
 import logging
+import tempfile
 logger = logging.getLogger('iDARTS.build_feature')
 
 from .feature_utils import *
@@ -27,6 +27,7 @@ DOWNSTREAM_EE_INDEX = 10
 POS0BASE_INDEX = 12
 REF_INDEX = 13
 ALT_INDEX = 14
+TEMP_FILE_NAME = next(tempfile._get_candidate_names())
 
 def get_region_coordinate(rmats_input_file_line):
     sp = rmats_input_file_line.strip().split('\t')
@@ -48,7 +49,7 @@ def get_region_coordinate(rmats_input_file_line):
 def fetch_alu_code(args): # the input file (rMATS format)
     input_file = args.input
     event_type = args.event_type
-    iDARTStmp_dir = os.path.dirname(os.path.abspath(input_file)) + '/_iDARTStmp/'
+    iDARTStmp_dir = os.path.dirname(os.path.abspath(input_file)) + '/_iDARTS_{}_tmp/'.format(TEMP_FILE_NAME)
     makedirs(iDARTStmp_dir)
     tmpAluBed = iDARTStmp_dir + 'tmp.{}.alu.bed'.format(event_type)
     alufw = open(tmpAluBed, 'w')
@@ -61,8 +62,7 @@ def fetch_alu_code(args): # the input file (rMATS format)
         ALT_INDEX = int(file_header.index('Alt'))
     else:
         fp.readline()
-    logger.info('fetching Alu for splicing events')
-    for line in tqdm(fp, total = file_num_lines - 1):
+    for line in fp:
         sp = line.strip().split('\t')
         chrom = sp[CHROM_INDEX]
         strand = sp[STRAND_INDEX]
@@ -295,7 +295,7 @@ def get_rnafold_predict_pu_score(dict_seq, tmp_file, event_type):
 
 def build_feature(input_file, event_type, output_file, mutate):
     logger.info('building features for {}'.format(event_type))
-    iDARTStmp_dir = os.path.dirname(os.path.abspath(input_file)) + '/_iDARTStmp/'
+    iDARTStmp_dir = os.path.dirname(os.path.abspath(input_file)) + '/_iDARTS_{}_tmp/'.format(TEMP_FILE_NAME)
     splice_feature_fn = resource_filename('iDARTS.resources.features', 'SpliceCode_feature_list_{}.txt'.format(event_type))
     dict_chrom_phatsConsScore = load_phatsConsScore()
     dict_alu_counts = load_alu_counts(iDARTStmp_dir + 'event.{}.alu'.format(event_type))
@@ -322,7 +322,7 @@ def build_feature(input_file, event_type, output_file, mutate):
     fw = open(output_file, 'w')
     fw.write(header + '\t' + '\t'.join(splice_feature_list) + '\n')
 
-    for annotation in tqdm(annotation_fp, total = file_num_lines - 1):
+    for annotation in tqdm(annotation_fp, total = file_num_lines - 1, desc = 'SE'):
         if len(annotation.strip()) == 0:
             continue
         annotation_list = annotation.strip().split('\t')
@@ -555,6 +555,6 @@ def build_feature(input_file, event_type, output_file, mutate):
 def main(args):
     fetch_alu_code(args)
     build_feature(args.input, args.event_type, args.output, args.mutate)
-    iDARTStmp_dir = os.path.dirname(os.path.abspath(args.input)) + '/_iDARTStmp/'
+    iDARTStmp_dir = os.path.dirname(os.path.abspath(args.input)) + '/_iDARTS_{}_tmp/'.format(TEMP_FILE_NAME)
     logger.info('Deleting tmp files')
     remove_file(iDARTStmp_dir)

@@ -41,61 +41,67 @@ def setup_logger():
     return logger
 
 def add_get_resources_parser( subparsers ):
-    ag_get_resources = subparsers.add_parser("get_resources", help="iDARTS get_resources: connects online to get hg19 fasta and phastCons score")
+    ag_get_resources = subparsers.add_parser("get_resources", help="iDARTS get_resources: download hg19 fasta and phastCons scores")
     
     ag_get_resources.add_argument("-o", "--out-dir", dest="out_dir", type=str, required=False,
         help="Optional, default user home directory: Output folder for downloaded data")
+    ag_get_resources.add_argument("-f", "--force", dest="force",type=str, required=False,
+        default='False', choices=['True', 'False'],
+        help="Optional, force redownload of resources")
 
     return
 
 def add_build_feature_parser( subparsers ):
-    ag_build_feature = subparsers.add_parser("build_feature", help="iDARTS build_feature: build feature file given required information")
+    ag_build_feature = subparsers.add_parser("build_feature", help="iDARTS build_feature: build cis-sequence features for alternative splicing events")
 
     ag_build_feature.add_argument("-t", "--type", dest="event_type", type=str, required=False,
-        default='SE', choices=['SE', 'A5SS', 'A3SS', 'RI'],
-        help="Optional, default SE: specify the alternative splicing event type. SE: skipped exons, A3SS: alternative 3 splice sites, A5SS: alternative 5 splice sites, RI: retained introns")
+        default='SE', choices=['SE', 'A5SS', 'A3SS'],
+        help="Optional, default SE: specify the alternative splicing event type. SE: skipped exons, A3SS: alternative 3-prime splice sites, A5SS: alternative 5-prime splice sites")
 
     ag_build_feature.add_argument("-i", "--input", dest="input", type=str, required=True,
-        help="A list of alternative splicing events; iDARTS build feature output")
+        help="A list of alternative splicing events")
 
     ag_build_feature.add_argument("-m", "--mutate", dest="mutate", type=str, required=False,
         default = 'False', choices = ['True', 'False'], 
-        help="Annotate the sequence features with SNV (300nt within exon-intron boundary or on exons)")
+        help="Whether annotate the sequence features with SNV (300nt in the vicinity of skipped exons);")
 
     ag_build_feature.add_argument("-o", "--out-file-name", dest="output", type=str, required=True,
         help="Annotation output file name")
 
 def add_predict_parser( subparsers ):
-    ag_predict = subparsers.add_parser("predict", help="iDARTS predict: predict given required information")
+    ag_predict = subparsers.add_parser("predict", help="iDARTS predict: predict PSI values given alternative splicing events with annotated cis-sequence features and RBP expression levels from the GTEx or user-provided RBP expression levels")
 
     ag_predict.add_argument("-t", "--type", dest="event_type", type=str, required=False,
-        default='SE', choices=['SE', 'A5SS', 'A3SS', 'RI'],
-        help="Optional, default SE: specify the alternative splicing event type. SE: skipped exons, A3SS: alternative 3 splice sites, A5SS: alternative 5 splice sites, RI: retained introns")
+        default='SE', choices=['SE', 'A5SS', 'A3SS'],
+        help="Optional, default SE: specify the alternative splicing event type. SE: skipped exons, A3SS: alternative 3 splice sites, A5SS: alternative 5 splice sites")
 
     ag_predict.add_argument("-i", "--input", dest="input", type=str, required=True,
-        help="A list of alternative splicing events; iDARTS build feature")
+        help="A list of alternative splicing events with built cis-sequence features; the input is the output of the build_feature step")
 
     ag_predict.add_argument("-e", "--expression", dest="expr", type=str, required=False,
-        help="Expressing file (TPM value from Kallisto);header format 'Gene_ID\\tExp1,Exp2,Exp3...(different expression profiles separated by comma)'")
+        help="Optional, a list of RBP expression levels  (TPM values from Kallisto); header format 'Gene_ID\\tExp1,Exp2,Exp3...(different expression profiles separated by comma). If not provided, the pre-compiled RBP expression levels from the GTEx will be used.'")
 
     ag_predict.add_argument("-o", "--out-file-name", dest="output", type=str, required=True,
-        help="Annotation output file name")
+        help="The predicted PSI values for the alternative splicing events")
 
-def add_parse_vcf( subparsers ):
-    ag_parse_vcf = subparsers.add_parser("parse_vcf", help="iDARTS parse_vcf: mapping SNV to alternative splicing event given vcf file")
+def add_parse_vcf_parser( subparsers ):
+    ag_parse_vcf = subparsers.add_parser("parse_vcf", help="iDARTS parse_vcf: predict splicing changes as deltaPSI for variants in user-provided VCF file; The predicted PSI values of alternative splicing events with reference alleles and alternative alleles will also be reported.") 
 
     ag_parse_vcf.add_argument("-t", "--type", dest="event_type", type=str, required=False,
-        default='SE', choices=['SE', 'A5SS', 'A3SS', 'RI'],
-        help="Optional, default SE: specify the alternative splicing event type. SE: skipped exons, A3SS: alternative 3 splice sites, A5SS: alternative 5 splice sites, RI: retained introns")
+        default='SE', choices=['SE', 'A5SS', 'A3SS'],
+        help="Optional, default SE: specify the alternative splicing event type. SE: skipped exons, A3SS: alternative 3 splice sites, A5SS: alternative 5 splice sites")
 
-    ag_parse_vcf.add_argument("-i", "--input", dest="input", type=str, required=True,
-        help="A list of alternative splicing events; iDARTS parse SNVs from vcf for alternative splicing events")
+    ag_parse_vcf.add_argument("-i", "--input", dest="input", type=str, required=False,
+        help="Optional, a list of alternative splicing events; If not provided, the alternative splicing events will be the pre-compiled events from GENCODEv26lift37")
 
     ag_parse_vcf.add_argument("-v", "--vcf_path", dest="vcf_path", type=str, required=True,
-        help="vcf path")
+        help="the file location of the VCF")
 
-    ag_parse_vcf.add_argument("-o", "--out-file-name", dest="output", type=str, required=True,
-        help="parsed vcf output file name")
+    ag_parse_vcf.add_argument("-e", "--expression", dest="expr", type=str, required=False,
+        help="Optional, a list of RBP expression levels  (TPM values from Kallisto); header format 'Gene_ID\\tExp1,Exp2,Exp3...(different expression profiles separated by comma). If not provided, the pre-compiled RBP expression levels from the GTEx will be used.'")
+
+    ag_parse_vcf.add_argument("-o", "--outFileNamePrefix", dest="outFileNamePrefix", type=str, required=True,
+        help="output files name prefix (including full or relative path).")
 
 def get_arg_parser():
     """DOCSTRING
@@ -113,14 +119,14 @@ def get_arg_parser():
     # get data
     add_get_resources_parser( subparsers )
 
+    # parse vcf
+    add_parse_vcf_parser( subparsers )
+
     # build feature
     add_build_feature_parser( subparsers )
     
     # predict
     add_predict_parser( subparsers )
-
-    # parse vcf
-    add_parse_vcf( subparsers )
     
     return argparser
 

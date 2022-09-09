@@ -1,8 +1,9 @@
 # -*- coding: UTF-8 -*-
 
 """
-iDARTS - build_feature_utils
+iDARTS - feature_utils
 """
+
 import string
 import os
 import yaml

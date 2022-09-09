@@ -1,7 +1,7 @@
 # -*- coding: UTF-8 -*-
 
-"""Here are general configurations for the Darts_DNN package, including 
-version control, trained model parameter, etc.
+"""Here are general configurations for the iDARTS package, including 
+resources and the iDARTS deep learning models
 """
 
 from pkg_resources import resource_filename

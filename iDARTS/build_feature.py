@@ -28,16 +28,9 @@ def parser(args):
         if event_type == 'SE':
             from . import build_feature_SE
             build_feature_SE.main(args)
-        if event_type == 'RI':
-            #from . import build_feature_RI
-            #build_feature_RI.main(args)
-            logger.info('RI still under development')
-            sys.exit(0)
         if event_type == 'A3SS' or event_type == 'A5SS':
-            #from . import build_feature_ASS
-            #build_feature_ASS.main(args)
-            logger.info('A3SS and A5SS still under development')
-            sys.exit(0)
+            from . import build_feature_ASS
+            build_feature_ASS.main(args)
     else:
         logger.info('resources need to be downloaded first\nUsage:\n...iDARTS get_resources')
         sys.exit(0)

@@ -1,17 +1,18 @@
 # -*- coding: UTF-8 -*-
 
 """
-iDARTS - get_resources
-Implements an internal downloading module for 
-getting data from internet. Data includes training
-data, cis feature files, etc.
-This module depends on the url and md5sum stored in ``resources/download.yaml``
+iDARTS - build_feature_ASS
+Implements a splicing feature build module for 
+alternative 5' splice sites events or 
+alternative 3' splice sites features
 """
+
 from subprocess import *
 from collections import defaultdict
 from pkg_resources import resource_filename
 import time
 import logging
+import tempfile
 logger = logging.getLogger('iDARTS.build_feature')
 
 from .feature_utils import *
@@ -27,48 +28,49 @@ FLANKINGEXONEND = 10
 POS0BASE_INDEX = 12
 REF_INDEX = 13
 ALT_INDEX = 14
+TEMP_FILE_NAME = next(tempfile._get_candidate_names())
 
 def get_region_coordinate(rmats_input_list, event_type):
     sp = rmats_input_list
-    C_L = [sp[LONGEXONSTART], sp[LONGEXONEND]]
-    C_S = [sp[SHORTEXONSTART], sp[SHORTEXONEND]]
-    C_F = [sp[FLANKINGEXONSTART], sp[FLANKINGEXONEND]]
+    C_L = [int(sp[LONGEXONSTART]), int(sp[LONGEXONEND])]
+    C_S = [int(sp[SHORTEXONSTART]), int(sp[SHORTEXONEND])]
+    C_F = [int(sp[FLANKINGEXONSTART]), int(sp[FLANKINGEXONEND])]
     if sp[STRAND_INDEX] == '-':
         if event_type == 'A3SS':
-            C_L_300 = [sp[LONGEXONEND], int(sp[LONGEXONEND]) + 300]
-            C_S_300 = [sp[SHORTEXONEND], int(sp[SHORTEXONEND]) + 300]
-            C_F_300 = [int(sp[FLANKINGEXONSTART]) - 300, sp[FLANKINGEXONSTART]]
-            C_L_long = [sp[LONGEXONEND], int(sp[LONGEXONEND]) + 2000]
-            C_S_long = [sp[SHORTEXONEND], int(sp[SHORTEXONEND]) + 2000]
-            C_F_long = [int(sp[FLANKINGEXONSTART]) - 2000, sp[FLANKINGEXONSTART]]
+            C_L_300 = [int(sp[LONGEXONEND]), int(sp[LONGEXONEND]) + 300]
+            C_S_300 = [int(sp[SHORTEXONEND]), int(sp[SHORTEXONEND]) + 300]
+            C_F_300 = [int(sp[FLANKINGEXONSTART]) - 300, int(sp[FLANKINGEXONSTART])]
+            C_L_long = [int(sp[LONGEXONEND]), int(sp[LONGEXONEND]) + 2000]
+            C_S_long = [int(sp[SHORTEXONEND]), int(sp[SHORTEXONEND]) + 2000]
+            C_F_long = [int(sp[FLANKINGEXONSTART]) - 2000, int(sp[FLANKINGEXONSTART])]
         else:
             C_L_300 = [int(sp[LONGEXONSTART]) - 300, int(sp[LONGEXONSTART])]
-            C_S_300 = [int(sp[SHORTEXONSTART]) - 300, sp[SHORTEXONSTART]]
-            C_F_300 = [sp[LONGEXONEND], int(sp[LONGEXONEND]) + 300]
+            C_S_300 = [int(sp[SHORTEXONSTART]) - 300, int(sp[SHORTEXONSTART])]
+            C_F_300 = [int(sp[LONGEXONEND]), int(sp[LONGEXONEND]) + 300]
             C_L_long = [int(sp[LONGEXONSTART]) - 2000, int(sp[LONGEXONSTART])]
-            C_S_long = [int(sp[SHORTEXONSTART]) - 2000, sp[SHORTEXONSTART]]
-            C_F_long = [sp[LONGEXONEND], int(sp[LONGEXONEND]) + 2000]
+            C_S_long = [int(sp[SHORTEXONSTART]) - 2000, int(sp[SHORTEXONSTART])]
+            C_F_long = [int(sp[LONGEXONEND]), int(sp[LONGEXONEND]) + 2000]
     else:
         if event_type == 'A5SS':
-            C_L_300 = [sp[LONGEXONEND], int(sp[LONGEXONEND]) + 300]
-            C_S_300 = [sp[SHORTEXONEND], int(sp[SHORTEXONEND]) + 300]
-            C_F_300 = [int(sp[FLANKINGEXONSTART]) - 300, sp[FLANKINGEXONSTART]]
-            C_L_long = [sp[LONGEXONEND], int(sp[LONGEXONEND]) + 2000]
-            C_S_long = [sp[SHORTEXONEND], int(sp[SHORTEXONEND]) + 2000]
-            C_F_long = [int(sp[FLANKINGEXONSTART]) - 2000, sp[FLANKINGEXONSTART]]
+            C_L_300 = [int(sp[LONGEXONEND]), int(sp[LONGEXONEND]) + 300]
+            C_S_300 = [int(sp[SHORTEXONEND]), int(sp[SHORTEXONEND]) + 300]
+            C_F_300 = [int(sp[FLANKINGEXONSTART]) - 300, int(sp[FLANKINGEXONSTART])]
+            C_L_long = [int(sp[LONGEXONEND]), int(sp[LONGEXONEND]) + 2000]
+            C_S_long = [int(sp[SHORTEXONEND]), int(sp[SHORTEXONEND]) + 2000]
+            C_F_long = [int(sp[FLANKINGEXONSTART]) - 2000, int(sp[FLANKINGEXONSTART])]
         else:
             C_L_300 = [int(sp[LONGEXONSTART]) - 300, int(sp[LONGEXONSTART])]
-            C_S_300 = [int(sp[SHORTEXONSTART]) - 300, sp[SHORTEXONSTART]]
-            C_F_300 = [sp[LONGEXONEND], int(sp[LONGEXONEND]) + 300]
+            C_S_300 = [int(sp[SHORTEXONSTART]) - 300, int(sp[SHORTEXONSTART])]
+            C_F_300 = [int(sp[LONGEXONEND]), int(sp[LONGEXONEND]) + 300]
             C_L_long = [int(sp[LONGEXONSTART]) - 2000, int(sp[LONGEXONSTART])]
-            C_S_long = [int(sp[SHORTEXONSTART]) - 2000, sp[SHORTEXONSTART]]
-            C_F_long = [sp[LONGEXONEND], int(sp[LONGEXONEND]) + 2000]
+            C_S_long = [int(sp[SHORTEXONSTART]) - 2000, int(sp[SHORTEXONSTART])]
+            C_F_long = [int(sp[LONGEXONEND]), int(sp[LONGEXONEND]) + 2000]
     return C_L, C_S, C_F, C_L_300, C_S_300, C_F_300, C_L_long, C_S_long, C_F_long
 
 def fetch_seq_alu_code(args): # the input file (rMATS format)
     input_file = args.input
     event_type = args.event_type
-    iDARTStmp_dir = os.path.dirname(os.path.abspath(input_file)) + '/_iDARTStmp/'
+    iDARTStmp_dir = os.path.dirname(os.path.abspath(input_file)) + '/_iDARTS_{}_tmp/'.format(TEMP_FILE_NAME)
     makedirs(iDARTStmp_dir)
     tmpAluBed = iDARTStmp_dir + 'tmp.{}.alu.bed'.format(event_type)
     alufw = open(tmpAluBed, 'w')
@@ -83,8 +85,7 @@ def fetch_seq_alu_code(args): # the input file (rMATS format)
         ALT_INDEX = int(file_header.index('Alt'))
     else:
         fp.readline()
-    logger.info('fetching sequences and Alu for splicing events')
-    for line in tqdm(fp, total = file_num_lines - 1):
+    for line in fp:
         sp = line.strip().split('\t')
         chrom = sp[CHROM_INDEX]
         strand = sp[STRAND_INDEX]
@@ -263,17 +264,16 @@ def get_rnafold_predict_pu_score(dict_seq, tmp_file, event_type):
         dict_rnafold_pu_scores.update(parse_rnafold_predict_pu_score(unpair_prob_list, min(50, len(dict_seq['C_S'])), 'C_S', 'right'))
     return dict_rnafold_pu_scores
 
-def build_feature(input_file, event_type, output_file):
+def build_feature(input_file, event_type, output_file, mutate):
     logger.info('building features for {}'.format(event_type))
-    iDARTStmp_dir = os.path.dirname(os.path.abspath(input_file)) + '/_iDARTStmp/'
+    iDARTStmp_dir = os.path.dirname(os.path.abspath(input_file)) + '/_iDARTS_{}_tmp/'.format(TEMP_FILE_NAME)
     splice_feature_fn = resource_filename('iDARTS.resources.features', 'SpliceCode_feature_list_{}.txt'.format(event_type))
     dict_chrom_phatsConsScore = load_phatsConsScore()
     dict_ESE_matrix = load_ESE_matrix_PSSM()
     dict_rna_binding_pssm = load_rna_binding_motif_pssm()
     dict_rna_binding_motif = load_rna_binding_motif()
     splice_feature_list = load_splice_feature_list(splice_feature_fn)
-    donor_maxent_matrix = maxent_fast.load_matrix(5)
-    acceptor_maxent_matrix = maxent_fast.load_matrix(3)
+    acceptor_cnn, donor_cnn = load_cnn_splice_predictor()
     esr_matrix = load_esr_matrix()
     rosenberg_matrix = load_rosenberg_matrix()
     dict_alu_counts = load_alu_counts(iDARTStmp_dir + 'event.{}.alu'.format(event_type))
@@ -290,23 +290,32 @@ def build_feature(input_file, event_type, output_file):
     file_num_lines = get_file_num_lines(input_file)
     annotation_fp = open(input_file)
     header = annotation_fp.readline().strip()
-    seq_fp = open(iDARTStmp_dir + 'event.{}.seq'.format(event_type))
-    seq_fp_header = seq_fp.readline().strip()
     fw = open(output_file, 'w')
     fw.write(header + '\t' + '\t'.join(splice_feature_list) + '\n')
 
     for annotation in tqdm(annotation_fp, total = file_num_lines - 1):
-        seq_file_line_list = seq_fp.readline().strip().split('\t')
         if len(annotation.strip()) == 0:
             continue
         annotation_list = annotation.strip().split('\t')
-        C_L_seq, C_S_seq, C_F_seq, C_L_300_seq, C_S_300_seq, C_F_300_seq = seq_file_line_list[1:]
-        C_L_seq_matrix = np.array([NT_DICT[x] for x in C_L_seq])
-        C_S_seq_matrix = np.array([NT_DICT[x] for x in C_S_seq])
-        C_F_seq_matrix = np.array([NT_DICT[x] for x in C_F_seq])
-        C_L_300_seq_matrix = np.array([NT_DICT[x] for x in C_L_300_seq])
-        C_S_300_seq_matrix = np.array([NT_DICT[x] for x in C_S_300_seq])
-        C_F_300_seq_matrix = np.array([NT_DICT[x] for x in C_F_300_seq])
+        C_L, C_S, C_F, C_L_300, C_S_300, C_F_300, C_L_long, C_S_long, C_F_long = get_region_coordinate(annotation_list, event_type)
+        chrom = annotation_list[CHROM_INDEX]
+        strand = annotation_list[STRAND_INDEX]
+        mutate_pos_list, alt_base_list = [], []
+        if mutate == 'True':
+            mutate_pos_list = annotation_list[POS0BASE_INDEX].split(',')
+            alt_base_list = annotation_list[ALT_INDEX].split(',')
+        C_L_seq = seq_fetch(chrom, C_L[0], C_L[1], strand, mutate_pos_list, alt_base_list)
+        C_S_seq = seq_fetch(chrom, C_S[0], C_S[1], strand, mutate_pos_list, alt_base_list)
+        C_F_seq = seq_fetch(chrom, C_F[0], C_F[1], strand, mutate_pos_list, alt_base_list)
+        C_L_300_seq = seq_fetch(chrom, C_L_300[0], C_L_300[1], strand, mutate_pos_list, alt_base_list)
+        C_S_300_seq = seq_fetch(chrom, C_S_300[0], C_S_300[1], strand, mutate_pos_list, alt_base_list)
+        C_F_300_seq = seq_fetch(chrom, C_F_300[0], C_F_300[1], strand, mutate_pos_list, alt_base_list)
+        C_L_seq_matrix = one_hot_encode(C_L_seq)
+        C_S_seq_matrix = one_hot_encode(C_S_seq)
+        C_F_seq_matrix = one_hot_encode(C_F_seq)
+        C_L_300_seq_matrix = one_hot_encode(C_L_300_seq)
+        C_S_300_seq_matrix = one_hot_encode(C_S_300_seq)
+        C_F_300_seq_matrix = one_hot_encode(C_F_300_seq)
         dict_seq2matrix = {}
         dict_seq2matrix['C_L'] = C_L_seq_matrix
         dict_seq2matrix['C_S'] = C_S_seq_matrix
@@ -343,10 +352,10 @@ def build_feature(input_file, event_type, output_file):
         dict_seq_feature2value['LogLen.C_S'] = np.log10(length_C_S)
         dict_seq_feature2value['LogLen.C_L'] = np.log10(length_C_L)
         dict_seq_feature2value['LogLen.C_F'] = np.log10(length_C_F)
-        dict_seq_feature2value['LogLen.I_S'] = np.log10(length_I_S)
-        dict_seq_feature2value['LogLen.I_L'] = np.log10(length_I_L)
-        dict_seq_feature2value['LogLenRatio.I_S_C_S'] = np.log10((length_I_S + 0.0) / length_C_S)
-        dict_seq_feature2value['LogLenRatio.I_L_C_L'] = np.log10((length_I_L + 0.0) / length_C_L)
+        dict_seq_feature2value['LogLen.I_S'] = np.log10(length_I_S + 1.0)
+        dict_seq_feature2value['LogLen.I_L'] = np.log10(length_I_L + 1.0)
+        dict_seq_feature2value['LogLenRatio.I_S_C_S'] = np.log10((length_I_S + 1.0) / length_C_S)
+        dict_seq_feature2value['LogLenRatio.I_L_C_L'] = np.log10((length_I_L + 1.0) / length_C_L)
         dict_seq_feature2value['Translatable.C_S'] = translatable(C_S_seq)
         dict_seq_feature2value['Translatable.C_L'] = translatable(C_L_seq)
         dict_seq_feature2value['Translatable.C_F'] = translatable(C_F_seq)
@@ -366,13 +375,31 @@ def build_feature(input_file, event_type, output_file):
             dict_seq_feature2value['FrameShift.C_L'] = 1
         ## get splice AG/GT position AltAGpos AltGTpos
         if event_type == 'A3SS':
-            dict_seq_feature2value['AltAGpos.C_S'] = len(C_S_300_seq) - C_S_300_seq.rindex('AG')
-            dict_seq_feature2value['AltAGpos.C_L'] = len(C_L_300_seq) - C_L_300_seq.rindex('AG')
-            dict_seq_feature2value['AltGTpos.C_F'] = C_F_300_seq.index('GT')
+            if 'AG' in C_S_300_seq:
+                dict_seq_feature2value['AltAGpos.C_S'] = len(C_S_300_seq) - C_S_300_seq.rindex('AG')
+            else:
+                dict_seq_feature2value['AltAGpos.C_S'] = 300
+            if 'AG' in C_L_300_seq:
+                dict_seq_feature2value['AltAGpos.C_L'] = len(C_L_300_seq) - C_L_300_seq.rindex('AG')
+            else:
+                dict_seq_feature2value['AltAGpos.C_L'] = 300
+            if 'GT' in C_F_300_seq:
+                dict_seq_feature2value['AltGTpos.C_F'] = C_F_300_seq.index('GT')
+            else:
+                dict_seq_feature2value['AltGTpos.C_F'] = 300
         if event_type == 'A5SS':
-            dict_seq_feature2value['AltGTpos.C_S'] = C_S_300_seq.index('GT')
-            dict_seq_feature2value['AltGTpos.C_L'] = C_L_300_seq.index('GT')
-            dict_seq_feature2value['AltAGpos.C_F'] = len(C_F_300_seq) - C_F_300_seq.rindex('AG')
+            if 'GT' in C_S_300_seq:
+                dict_seq_feature2value['AltGTpos.C_S'] = C_S_300_seq.index('GT')
+            else:
+                dict_seq_feature2value['AltGTpos.C_S'] = 300
+            if 'GT' in C_L_300_seq:
+                dict_seq_feature2value['AltGTpos.C_L'] = C_L_300_seq.index('GT')
+            else:
+                dict_seq_feature2value['AltGTpos.C_L'] = 300
+            if 'AG' in C_F_300_seq:
+                dict_seq_feature2value['AltAGpos.C_F'] = len(C_F_300_seq) - C_F_300_seq.rindex('AG')
+            else:
+                dict_seq_feature2value['AltAGpos.C_F'] = 300
         ### Conservation score
         C_F_300_conservation, C_S_300_conservation, C_L_300_conservation = get_regional_conservation_score(annotation_list, dict_chrom_phatsConsScore, event_type)
         dict_region2conservation = {}
@@ -393,58 +420,50 @@ def build_feature(input_file, event_type, output_file):
             JunctionAvgP1_100_C_F = np.mean(C_F_300_conservation[-2:]) / (np.mean(dict_seq_feature2value['Cons.MeanP1_100.C_F']) + 1e-4)
             JunctionAvgP1_100_C_S = np.mean(C_S_300_conservation[0:2]) / (np.mean(dict_seq_feature2value['Cons.MeanP1_100.C_S']) + 1e-4)
             JunctionAvgP1_100_C_L = np.mean(C_L_300_conservation[0:2]) / (np.mean(dict_seq_feature2value['Cons.MeanP1_100.C_L']) + 1e-4)
-        ### get splice site strength by maxent
-        # maxent_fast.score5('cagGTAAGT', matrix=donor)
-        # maxent_fast.score3('ttccaaacgaacttttgtAGgga', matrix=acceptor)
+
+        cnn_splice_window_size = 200 # CNN splice predictor window size
         if event_type == 'A3SS':
-            donor_C_F = C_F_seq[-3:] + C_F_300_seq[0:6]
-            acceptor_C_S = C_S_300_seq[-20:] + C_S_seq[0:3]
-            acceptor_C_L = C_L_300_seq[-20:] + C_L_seq[0:3]
-            if C_F_300_seq[0:2] == 'GT' or C_F_300_seq[0:2] == 'GC' or C_F_300_seq[0:2] == 'AT':
-                donor_C_F_score = round(maxent_fast.score5(donor_C_F, matrix = donor_maxent_matrix), 2)
-            else:
-                donor_C_F_score = -49.17
-            if C_S_300_seq[-2:] == 'AG' or C_S_300_seq[-2:] == 'AC':
-                acceptor_C_S_score = round(maxent_fast.score3(acceptor_C_S, matrix = acceptor_maxent_matrix), 2)
-            else:
-                acceptor_C_S_score = -67.35
-            if C_L_300_seq[-2:] == 'AG' or C_L_300_seq[-2:] == 'AC':
-                acceptor_C_L_score = round(maxent_fast.score3(acceptor_C_L, matrix = acceptor_maxent_matrix), 2)
-            else:
-                acceptor_C_L_score = -67.35
+            if strand == '+':
+                donor_C_F = seq_fetch(chrom, C_F[1] - cnn_splice_window_size, C_F[1] + cnn_splice_window_size, strand, mutate_pos_list, alt_base_list)
+                acceptor_C_S = seq_fetch(chrom, C_S[0] - 2 - cnn_splice_window_size, C_S[0] - 2 + cnn_splice_window_size, strand, mutate_pos_list, alt_base_list)
+                acceptor_C_L = seq_fetch(chrom, C_L[0] - 2 - cnn_splice_window_size, C_L[0] - 2 + cnn_splice_window_size, strand, mutate_pos_list, alt_base_list)
+            if strand == '-':
+                donor_C_F = seq_fetch(chrom, C_F[0] - cnn_splice_window_size, C_F[0] + cnn_splice_window_size, strand, mutate_pos_list, alt_base_list)
+                acceptor_C_S = seq_fetch(chrom, C_S[1] + 2 - cnn_splice_window_size, C_S[1] + 2 + cnn_splice_window_size, strand, mutate_pos_list, alt_base_list)
+                acceptor_C_L = seq_fetch(chrom, C_L[1] + 2 - cnn_splice_window_size, C_L[1] + 2 + cnn_splice_window_size, strand, mutate_pos_list, alt_base_list)
+            donor_C_F_score = round(donor_cnn.predict(np.asarray([one_hot_encode(donor_C_F)])).reshape(-1,), 3)
+            acceptor_C_S_score = round(acceptor_cnn.predict(np.asarray([one_hot_encode(acceptor_C_S)])).reshape(-1,), 3)
+            acceptor_C_L_score = round(acceptor_cnn.predict(np.asarray([one_hot_encode(acceptor_C_L)])).reshape(-1,), 3)
             ## get acceptor and donor probablity
             donor_C_F_score_prob = 2 ** donor_C_F_score / (2 ** donor_C_F_score + 1.0)
             acceptor_C_S_score_prob = 2 ** acceptor_C_S_score / (2 ** acceptor_C_S_score + 1.0)
             acceptor_C_L_score_prob = 2 ** acceptor_C_L_score / (2 ** acceptor_C_L_score + 1.0)
-            dict_seq_feature2value['donor.maxent_C_F'] = donor_C_F_score
-            dict_seq_feature2value['acceptor.maxent_C_S'] = acceptor_C_S_score
-            dict_seq_feature2value['acceptor.maxent_C_L'] = acceptor_C_L_score
+            dict_seq_feature2value['donor.CNN_C_F'] = donor_C_F_score
+            dict_seq_feature2value['acceptor.CNN_C_S'] = acceptor_C_S_score
+            dict_seq_feature2value['acceptor.CNN_C_L'] = acceptor_C_L_score
             dict_seq_feature2value['donor.weighted.JunctionAvgP1_100_C_F'] = JunctionAvgP1_100_C_F * donor_C_F_score_prob
             dict_seq_feature2value['acceptor.weighted.JunctionAvgP1_100_C_S'] = JunctionAvgP1_100_C_S * acceptor_C_S_score_prob
             dict_seq_feature2value['acceptor.weighted.JunctionAvgP1_100_C_L'] = JunctionAvgP1_100_C_L * acceptor_C_L_score_prob
+
         if event_type == 'A5SS':
-            acceptor_C_F = C_F_300_seq[-20:] + C_F_seq[0:3]
-            donor_C_S = C_S_seq[-3:] + C_S_300_seq[0:6]
-            donor_C_L = C_L_seq[-3:] + C_L_300_seq[0:6]
-            if C_F_300_seq[-2:] == 'AG' or C_F_300_seq[-2:] == 'AC':
-                acceptor_C_F_score = round(maxent_fast.score3(acceptor_C_F, matrix = acceptor_maxent_matrix), 2)
-            else:
-                acceptor_C_F_score = -67.35
-            if C_S_300_seq[0:2] == 'GT' or C_S_300_seq[0:2] == 'GC' or C_S_300_seq[0:2] == 'AT':
-                donor_C_S_score = round(maxent_fast.score5(donor_C_S, matrix = donor_maxent_matrix), 2)
-            else:
-                donor_C_S_score = -49.17
-            if C_L_300_seq[0:2] == 'GT' or C_L_300_seq[0:2] == 'GC' or C_L_300_seq[0:2] == 'AT':
-                donor_C_L_score = round(maxent_fast.score5(donor_C_L, matrix = donor_maxent_matrix), 2)
-            else:
-                donor_C_L_score = -49.17
+            if strand == '+':
+                acceptor_C_F = seq_fetch(chrom, C_F[0] - 2 - cnn_splice_window_size, C_F[0] - 2 + cnn_splice_window_size, strand, mutate_pos_list, alt_base_list)
+                donor_C_S = seq_fetch(chrom, C_S[1] - cnn_splice_window_size, C_S[1] + cnn_splice_window_size, strand, mutate_pos_list, alt_base_list)
+                donor_C_L = seq_fetch(chrom, C_L[1] - cnn_splice_window_size, C_L[1] + cnn_splice_window_size, strand, mutate_pos_list, alt_base_list)
+            if strand == '-':
+                acceptor_C_F = seq_fetch(chrom, C_F[1] + 2 - cnn_splice_window_size, C_F[1] + 2 + cnn_splice_window_size, strand, mutate_pos_list, alt_base_list)
+                donor_C_S = seq_fetch(chrom, C_S[0] - cnn_splice_window_size, C_S[0] + cnn_splice_window_size, strand, mutate_pos_list, alt_base_list)
+                donor_C_L = seq_fetch(chrom, C_L[0] - cnn_splice_window_size, C_L[0] + cnn_splice_window_size, strand, mutate_pos_list, alt_base_list)
+            acceptor_C_F_score = round(acceptor_cnn.predict(np.asarray([one_hot_encode(acceptor_C_F)])).reshape(-1,), 3)
+            donor_C_S_score = round(donor_cnn.predict(np.asarray([one_hot_encode(donor_C_S)])).reshape(-1,), 3)
+            donor_C_L_score = round(donor_cnn.predict(np.asarray([one_hot_encode(donor_C_L)])).reshape(-1,), 3)
             ## get acceptor and donor probablity
             acceptor_C_F_score_prob = 2 ** acceptor_C_F_score / (2 ** acceptor_C_F_score + 1.0)
             donor_C_S_score_prob = 2 ** donor_C_S_score / (2 ** donor_C_S_score + 1.0)
             donor_C_L_score_prob = 2 ** donor_C_L_score / (2 ** donor_C_L_score + 1.0)
-            dict_seq_feature2value['acceptor.maxent_C_F'] = acceptor_C_F_score
-            dict_seq_feature2value['donor.maxent_C_S'] = donor_C_S_score
-            dict_seq_feature2value['donor.maxent_C_L'] = donor_C_L_score
+            dict_seq_feature2value['acceptor.CNN_C_F'] = acceptor_C_F_score
+            dict_seq_feature2value['donor.CNN_C_S'] = donor_C_S_score
+            dict_seq_feature2value['donor.CNN_C_L'] = donor_C_L_score
             dict_seq_feature2value['acceptor.weighted.JunctionAvgP1_100_C_F'] = JunctionAvgP1_100_C_F * acceptor_C_F_score_prob
             dict_seq_feature2value['donor.weighted.JunctionAvgP1_100_C_S'] = JunctionAvgP1_100_C_S * donor_C_S_score_prob
             dict_seq_feature2value['donor.weighted.JunctionAvgP1_100_C_L'] = JunctionAvgP1_100_C_L * donor_C_L_score_prob
@@ -552,7 +571,7 @@ def build_feature(input_file, event_type, output_file):
     
 def main(args):
     fetch_seq_alu_code(args)
-    build_feature(args.input, args.event_type, args.output)
-    iDARTStmp_dir = os.path.dirname(os.path.abspath(args.input)) + '/_iDARTStmp/'
+    build_feature(args.input, args.event_type, args.output, args.mutate)
+    iDARTStmp_dir = os.path.dirname(os.path.abspath(args.input)) + '/_iDARTS_{}_tmp/'.format(TEMP_FILE_NAME)
     logger.info('Deleting tmp files')
     remove_file(iDARTStmp_dir)

@@ -1,107 +1,448 @@
-# iDARTS
-### individualized Deep-learning Analysis of RNA Transcript Splicing
-### Date: "07.01.2021"
+# iDARTS: individualized Deep-learning Analysis of RNA Transcript Splicing
 
-### Table of Contents
+## Table of Contents
 - [Installation](#installation)
 - [Usage](#usage)
+  - [Predicting effects of variants on splicing](#predicting-effects-of-variants-on-splicing)
+    - [Input](#input)
+    - [Output](#output)
+    - [Example](#example)
+      - [Example 1](#example-1)
+      - [Example 2](#example-2)
+      - [Example 3](#example-3)
+      - [Output](#output-example1-example2-and-example3)
+  - [Predicting splicing levels of AS events](#predicting-splicing-levels-of-as-events)
+  - [Detailed arguments](#detailed-arguments)
 - [Contact](#contact)
 - [Copyright and License Information](#copyright-and-license-information)
 
-### Installation (Under development)
-The installation is made easy through [Anaconda](https://anaconda.org/idarts).
+## Installation
+Installation of the required packages can be easy by using [Anaconda](https://anaconda.org/anaconda).
 
+Install required packages
 ```bash
 conda create -n idarts python=2.7  # optional
 conda activate idarts              # optional
-conda install -c idarts
+conda install -c bioconda viennarna==2.2.10
+conda install tensorflow==1.9.0
+conda install keras==2.2.4
+conda install bedtools
+conda install pysam
+conda install pandas
+conda install regex
+conda install pyyaml
+conda install pyBigWig
+pip install scikit-image
+conda install cyvcf2
+pip install psutil
+pip install joblib
+pip install tqdm
+```
+Clone the repository and then download resource files
+```bash
+# clone the repository
+git clone https://github.com/xinglab/iDARTS
+
+# download resources
+cd iDARTS
+# change the permission of iDARTS (on Linux server)
+chmod +x ./bin/iDARTS
+./bin/iDARTS get_resources -o /path/to/directory/
+```
+## Usage
+iDARTS allows users to take a **Variant Call Format** (VCF) file containing variants of interests and make predictions on either pre-compiled (annotated) or user-provided AS events, based on iDARTS DNN trained on GTEx data and reference RBP expression levels across 53 GTEx tissues. The software output includes the predicted splicing levels (PSI values) of the reference and variants alleles, as well as the predicted variant effects on splicing (ΔPSI) in GTEx tissue types. iDARTS can also make predictions based on user-provided RBP expression levels for specific sample types of interest. When a VCF file is not provided, iDARTS reports predicted splicing levels (PSI values) for AS events of interest.
+
+### Predicting effects of variants on splicing
+-----------------
+
+iDARTS is a robust and flexible computational framework for quantitative prediction of alternative splicing (AS) profiles. It can take several types of inputs.
+
+#### Input:
+
+- **Option 1.** User-provided VCF file
+  - The pre-compiled AS events and RBP expression levels across 53 GTEx tissues will be used for prediction.
+
+- **Option 2.** User-provided VCF file and AS events
+  - The pre-compiled RBP expression levels across 53 GTEx tissues will be used for prediction.
+  - iDARTS can make predictions for SE, A3SS, and A5SS. The format of each AS type can be found in [rmats-turbo](https://github.com/Xinglab/rmats-turbo). More specifically:
+    * Shared columns:
+      * `ID`: rMATS event id
+      * `GeneID`: Gene id
+      * `geneSymbol`: Gene name
+      * `chr`: Chromosome
+      * `strand`: Strand of the gene
+    * SE: `exonStart_0base` `exonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE`
+      + The inclusion form includes the target exon (`exonStart_0base`, `exonEnd`)
+    * A3SS, A5SS: `longExonStart_0base` `longExonEnd` `shortES` `shortEE` `flankingES` `flankingEE`
+      + The inclusion form includes the long exon (`longExonStart_0base`, `longExonEnd`) instead of the short exon (`shortES` `shortEE`)
+
+- **Option 3.** User-provided VCF file, AS events, and RBP expression levels for specific sample types of interest
+  - The preparation of AS events can be found in the above Option 2.
+  - iDARTS can make predictions for specific sample types of interest. This is enabled by preparing input gene expression file (TPM values quantified by [Kallisto](https://pachterlab.github.io/kallisto/)).
+  - The format of gene expression file:
+    * Column Name
+      + `GeneID`: Gene id
+      + `Sample1,Sample2,Sample3,...`: Expression levels of different samples separated by comma
+
+#### Output:
+iDARTS outputs two result files with user-defined file name prefix:
+
+|No. |File Name |Description|
+|---|---|---|
+|1|`output_file_name_prefix`.vcf|The output VCF file contains information of each variant and its predicted ΔPSI with the maximum absolute value across all provided mapped splicing events in tissue or samples. (iDARTS will make predictions only if variants are within 300nt of target exons.)|
+|2|`output_file_name_prefix`.iDARTS_prediction| The output iDARTS prediction file provides predicted splicing levels and ΔPSI across all tissues or samples for each variant in each splicing event as well as predicted splicing levels in each tissue or sample.|
+
+**1. output_file_name_prefix.vcf**
+
+* CHROM: Chromosome name
+* POS: Position
+* ID: SNP ID
+* REF: Reference allele
+* ALT: Alternative allele
+* QUAL: Not provided
+* FILTER: Not provided
+* INFO: `iDARTS`=`AS type`|`Predicted ΔPSI`.
+  + The predicted ΔPSI shows the maximum effect of the variant on splicing when considering all mapped AS events in samples.
+  + For SE events, if the predicted ΔPSI is positive, the variant causes higher inclusion for the target exon, and if the predicted ΔPSI is negative, the variant causes lower inclusion for the target exon.
+  + For A3SS/A5SS events, if the predicted ΔPSI is positive, the variant causes higher inclusion for the longer exon, and if the predicted ΔPSI is negative, the variant causes lower inclusion for the longer exon.
+
+**2. output_file_name_prefix.iDARTS_prediction**
+
+Shared columns:
+* `SNP_ID`: SNP ID of the variant
+* `max_deltaPSI`: The predicted ΔPSI with the maximum absolute value across all samples for each variant and AS event pair. This score can be used to investigate the effects of variants on specific splicing events.
+* `Pos0base`: The position of the variant (0-based)
+* `Ref`: Reference allele of the variant
+* `Alt`: Alternative allele of the variant
+* `GeneID`:  Gene ID
+* `geneSymbol`: Gene name
+* `chr`: Chromosome name
+* `strand`: strand of the gene
+
+AS event specific columns:
+* SE: `exonStart_0base` `exonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE`
+  + The inclusion form includes the target exon (`exonStart_0base`, `exonEnd`)
+* A3SS, A5SS: `longExonStart_0base` `longExonEnd` `shortES` `shortEE` `flankingES` `flankingEE`
+  + The inclusion form includes the long exon (`longExonStart_0base`, `longExonEnd`) instead of the short exon (`shortES` `shortEE`)
+
+iDARTS Prediction columns: (Suppose we have three samples with sample name Sample1, Sample2, and Sample3 specified in user-provided RBP expression levels of sample types. When not provided, the RBP expression levels across 53 GTEx tissues will be used.)
+
+* `Sample1_ref_PSI`: The predicted reference PSI of the target AS event in Sample1
+* `Sample1_ref_PSI`: The predicted reference PSI of the target AS event in Sample2
+* `Sample1_ref_PSI`: The predicted reference PSI of the target AS event in Sample3
+* `Sample1_deltaPSI`: The predicted ΔPSI of the target AS event in Sample1
+* `Sample1_deltaPSI`: The predicted ΔPSI of the target AS event in Sample2
+* `Sample1_deltaPSI`: The predicted ΔPSI of the target AS event in Sample3
+
+### Example
+-----------------
+#### Example 1:
+#### Input: User-provided VCF file
+- VCF file needs to be sorted and have an index file that ends with `.idx`.
+- Example code:
+```bash
+bcftools sort ./example/example.vcf > ./example/example.sorted.vcf
+bgzip ./example/example.sorted.vcf
+tabix -p vcf ./example/example.sorted.vcf.gz
 ```
 
-### Usage
-Detailed arguments:
+#### Process the sorted VCF file and predict the effects of variants in the VCF file on splicing
+```bash
+./bin/iDARTS parse_vcf -v ./example/example.sorted.vcf.gz -t SE -o ./example/example_iDARTS_pred
+```
+
+#### Example 2:
+#### Input: User-provided VCF file and AS events
+- VCF file needs to be sorted (Please see Example 1 for more details).
+- The example of SE event can be found in `./example/example.SE_events.txt`.
+
+#### Process the sorted VCF file and predict the effects of variants in the VCF file on splicing using user-provided AS events
+```bash
+./bin/iDARTS parse_vcf -v ./example/example.sorted.vcf.gz -t SE -i ./example/example.SE_events.txt -o ./example/example_iDARTS_pred
+```
+
+#### Example 3:
+#### Input: User-provided VCF file, AS events, and RBP expression levels for specific sample types of interest
+- VCF file needs to be sorted (Please see Example 1 for more details).
+- The example of SE event can be found in `./example/example.SE_events.txt`.
+- The example of RBP expression levels for different samples (here we take 53 tissues and cell types in GTEx as examples) can be found in `./example/example.RBP_expression_in_tissues.txt`.
+
+#### Process the sorted VCF file and predict the effects of variants in the VCF file on splicing using user-provided AS events and RBP expression levels
+```bash
+./bin/iDARTS parse_vcf -v ./example/example.sorted.vcf.gz -t SE -i ./example/example.SE_events.txt -e ./example/example.RBP_expression_in_tissues.txt -o ./example/example_iDARTS_pred
+```
+#### Output (Example1, Example2, and Example3):
+Example1, Example2, and Example3 have the same output.
+
+1. `./example/example_iDARTS_pred.vcf`
+```
+##fileformat=VCFv4.2
+##fileDate=20220907
+##reference=GRCh37/hg19
+##INFO=<ID=iDARTS,Number=.,Type=String,Description="iDARTS variant prediction. Maximum absolute deltaPSI across all tissues">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO
+2	110905531	2_110905531_C_T_b37	C	T	.	.	iDARTS=SE|-0.212
+2	166854706	2_166854706_G_C_b37	G	C	.	.	iDARTS=SE|-0.2885
+5	112102045	5_112102045_G_T_b37	G	T	.	.	iDARTS=SE|-0.4181
+8	68066380	8_68066380_C_G_b37	C	G	.	.	iDARTS=SE|-0.1084
+11	47369212	11_47369212_G_C_b37	G	C	.	.	iDARTS=SE|-0.3383
+11	94219111	11_94219111_G_A_b37	G	A	.	.	iDARTS=SE|-0.3088
+13	52535985	13_52535985_A_C_b37	A	C	.	.	iDARTS=SE|-0.0915
+14	73637762	14_73637762_A_G_b37	A	G	.	.	iDARTS=SE|-0.2253
+16	 2098764	  16_2098764_C_G_b37	C	G	.	.	iDARTS=SE|-0.1588
+X	135112295	X_135112295_G_A_b37	G	A	.	.	iDARTS=SE|-0.2213
+```
+2. `./example/example_iDARTS_pred.iDARTS_prediction`
+
+| SNP_ID | max_deltaPSI | Pos0base | Ref | Alt | GeneID | geneSymbol | chr | strand | exonStart_0base | exonEnd | upstreamES | upstreamEE | downstreamES | downstreamEE | Adipose - Subcutaneous_ref_PSI | Adipose - Visceral (Omentum)_ref_PSI | Adrenal Gland_ref_PSI | Artery - Aorta_ref_PSI | Artery - Coronary_ref_PSI | Artery - Tibial_ref_PSI | Bladder_ref_PSI | Brain - Amygdala_ref_PSI | Brain - Anterior cingulate cortex (BA24)_ref_PSI | Brain - Caudate (basal ganglia)_ref_PSI | Brain - Cerebellar Hemisphere_ref_PSI | Brain - Cerebellum_ref_PSI | Brain - Cortex_ref_PSI | Brain - Frontal Cortex (BA9)_ref_PSI | Brain - Hippocampus_ref_PSI | Brain - Hypothalamus_ref_PSI | Brain - Nucleus accumbens (basal ganglia)_ref_PSI | Brain - Putamen (basal ganglia)_ref_PSI | Brain - Spinal cord (cervical c-1)_ref_PSI | Brain - Substantia nigra_ref_PSI | Breast - Mammary Tissue_ref_PSI | Cells - Cultured fibroblasts_ref_PSI | Cells - EBV-transformed lymphocytes_ref_PSI | Cervix - Ectocervix_ref_PSI | Cervix - Endocervix_ref_PSI | Colon - Sigmoid_ref_PSI | Colon - Transverse_ref_PSI | Esophagus - Gastroesophageal Junction_ref_PSI | Esophagus - Mucosa_ref_PSI | Esophagus - Muscularis_ref_PSI | Fallopian Tube_ref_PSI | Heart - Atrial Appendage_ref_PSI | Heart - Left Ventricle_ref_PSI | Kidney - Cortex_ref_PSI | Liver_ref_PSI | Lung_ref_PSI | Minor Salivary Gland_ref_PSI | Muscle - Skeletal_ref_PSI | Nerve - Tibial_ref_PSI | Ovary_ref_PSI | Pancreas_ref_PSI | Pituitary_ref_PSI | Prostate_ref_PSI | Skin - Not Sun Exposed (Suprapubic)_ref_PSI | Skin - Sun Exposed (Lower leg)_ref_PSI | Small Intestine - Terminal Ileum_ref_PSI | Spleen_ref_PSI | Stomach_ref_PSI | Testis_ref_PSI | Thyroid_ref_PSI | Uterus_ref_PSI | Vagina_ref_PSI | Whole Blood_ref_PSI | Adipose - Subcutaneous_deltaPSI | Adipose - Visceral (Omentum)_deltaPSI | Adrenal Gland_deltaPSI | Artery - Aorta_deltaPSI | Artery - Coronary_deltaPSI | Artery - Tibial_deltaPSI | Bladder_deltaPSI | Brain - Amygdala_deltaPSI | Brain - Anterior cingulate cortex (BA24)_deltaPSI | Brain - Caudate (basal ganglia)_deltaPSI | Brain - Cerebellar Hemisphere_deltaPSI | Brain - Cerebellum_deltaPSI | Brain - Cortex_deltaPSI | Brain - Frontal Cortex (BA9)_deltaPSI | Brain - Hippocampus_deltaPSI | Brain - Hypothalamus_deltaPSI | Brain - Nucleus accumbens (basal ganglia)_deltaPSI | Brain - Putamen (basal ganglia)_deltaPSI | Brain - Spinal cord (cervical c-1)_deltaPSI | Brain - Substantia nigra_deltaPSI | Breast - Mammary Tissue_deltaPSI | Cells - Cultured fibroblasts_deltaPSI | Cells - EBV-transformed lymphocytes_deltaPSI | Cervix - Ectocervix_deltaPSI | Cervix - Endocervix_deltaPSI | Colon - Sigmoid_deltaPSI | Colon - Transverse_deltaPSI | Esophagus - Gastroesophageal Junction_deltaPSI | Esophagus - Mucosa_deltaPSI | Esophagus - Muscularis_deltaPSI | Fallopian Tube_deltaPSI | Heart - Atrial Appendage_deltaPSI | Heart - Left Ventricle_deltaPSI | Kidney - Cortex_deltaPSI | Liver_deltaPSI | Lung_deltaPSI | Minor Salivary Gland_deltaPSI | Muscle - Skeletal_deltaPSI | Nerve - Tibial_deltaPSI | Ovary_deltaPSI | Pancreas_deltaPSI | Pituitary_deltaPSI | Prostate_deltaPSI | Skin - Not Sun Exposed (Suprapubic)_deltaPSI | Skin - Sun Exposed (Lower leg)_deltaPSI | Small Intestine - Terminal Ileum_deltaPSI | Spleen_deltaPSI | Stomach_deltaPSI | Testis_deltaPSI | Thyroid_deltaPSI | Uterus_deltaPSI | Vagina_deltaPSI | Whole Blood_deltaPSI |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 11_47369212_G_C_b37 | 0.0415 | 47369211 | G | C | ENSG00000134571.10_2 | MYBPC3 | chr11 | - | 47368976 | 47369030 | 47368177 | 47368198 | 47369201 | 47369231 | 0.8497 | 0.8574 | 0.8544 | 0.8279 | 0.8405 | 0.8359 | 0.8289 | 0.8615 | 0.8621 | 0.8682 | 0.8274 | 0.8208 | 0.8486 | 0.8626 | 0.8648 | 0.8665 | 0.8512 | 0.8712 | 0.846 | 0.8688 | 0.8594 | 0.851 | 0.8732 | 0.8492 | 0.8482 | 0.8563 | 0.8675 | 0.8551 | 0.8384 | 0.845 | 0.8433 | 0.8584 | 0.8759 | 0.8584 | 0.883 | 0.8498 | 0.8602 | 0.851 | 0.8654 | 0.8492 | 0.8793 | 0.8712 | 0.8462 | 0.8577 | 0.8551 | 0.8714 | 0.893 | 0.875 | 0.8402 | 0.874 | 0.8356 | 0.8431 | 0.8747 | 0.0307 | 0.0302 | 0.0282 | 0.0342 | 0.0289 | 0.0287 | 0.0336 | 0.0244 | 0.0237 | 0.0229 | 0.0261 | 0.0287 | 0.0311 | 0.0224 | 0.0231 | 0.0225 | 0.0266 | 0.0243 | 0.0329 | 0.0229 | 0.0278 | 0.0328 | 0.0288 | 0.0258 | 0.028 | 0.0314 | 0.0335 | 0.0282 | 0.0415 | 0.0287 | 0.0284 | 0.0293 | 0.0239 | 0.03 | 0.0286 | 0.0311 | 0.0326 | 0.0272 | 0.0292 | 0.0261 | 0.0215 | 0.0239 | 0.0351 | 0.0321 | 0.0344 | 0.0247 | 0.02 | 0.0266 | 0.04 | 0.0156 | 0.0337 | 0.0295 | 0.029 |
+| 11_47369212_G_C_b37 | -0.3383 | 47369211 | G | C | ENSG00000134571.10_2 | MYBPC3 | chr11 | - | 47369201 | 47369231 | 47368976 | 47369030 | 47369407 | 47369456 | 0.839 | 0.8344 | 0.8299 | 0.822 | 0.8219 | 0.7968 | 0.8307 | 0.818 | 0.817 | 0.8207 | 0.7236 | 0.7513 | 0.8097 | 0.8212 | 0.8254 | 0.8163 | 0.8183 | 0.8214 | 0.8376 | 0.8166 | 0.8544 | 0.7868 | 0.8149 | 0.8301 | 0.8091 | 0.8348 | 0.8299 | 0.8375 | 0.8355 | 0.8295 | 0.8236 | 0.8043 | 0.7973 | 0.8217 | 0.8336 | 0.8344 | 0.8528 | 0.7971 | 0.8224 | 0.7987 | 0.8464 | 0.8381 | 0.8384 | 0.8356 | 0.8355 | 0.8396 | 0.8432 | 0.8382 | 0.7605 | 0.8021 | 0.8142 | 0.8481 | 0.8321 | -0.3105 | -0.3283 | -0.3103 | -0.291 | -0.2923 | -0.2902 | -0.2883 | -0.3033 | -0.2945 | -0.284 | -0.2349 | -0.2443 | -0.2752 | -0.2754 | -0.2977 | -0.2802 | -0.2795 | -0.2962 | -0.2929 | -0.2902 | -0.2851 | -0.3211 | -0.2998 | -0.2784 | -0.2792 | -0.32 | -0.3092 | -0.3201 | -0.3252 | -0.327 | -0.2575 | -0.3381 | -0.3383 | -0.3326 | -0.3135 | -0.2762 | -0.3185 | -0.331 | -0.2545 | -0.2564 | -0.2974 | -0.2653 | -0.2857 | -0.2815 | -0.283 | -0.2728 | -0.2413 | -0.3314 | -0.2552 | -0.2802 | -0.2601 | -0.2814 | -0.3211 |
+| 11_47369212_G_C_b37 | 0.0111 | 47369211 | G | C | ENSG00000134571.10_2 | MYBPC3 | chr11 | - | 47369407 | 47369456 | 47369201 | 47369231 | 47369974 | 47370092 | 0.9499 | 0.95 | 0.9609 | 0.9508 | 0.9527 | 0.9512 | 0.9565 | 0.9449 | 0.9356 | 0.9404 | 0.912 | 0.9122 | 0.9298 | 0.9293 | 0.9466 | 0.9395 | 0.9324 | 0.9457 | 0.9508 | 0.9491 | 0.9515 | 0.9571 | 0.9537 | 0.9566 | 0.9459 | 0.9569 | 0.9533 | 0.9555 | 0.9559 | 0.9551 | 0.9333 | 0.9453 | 0.9507 | 0.9527 | 0.9577 | 0.9439 | 0.95 | 0.9386 | 0.9389 | 0.9419 | 0.9585 | 0.9386 | 0.9523 | 0.9454 | 0.9453 | 0.9542 | 0.9587 | 0.9546 | 0.9155 | 0.9441 | 0.9469 | 0.9511 | 0.9539 | 0.0039 | 0.0035 | 0.0024 | 0.0051 | 0.0029 | 0.0036 | 0.004 | 0.0023 | 0.0064 | 0.0051 | 0.0033 | 0.002 | 0.0075 | 0.0068 | 0.0027 | 0.005 | 0.0061 | 0.004 | 0.0046 | 0.0048 | 0.0029 | 0.0055 | 0.0037 | 0.0017 | 0.0011 | 0.0052 | 0.0063 | 0.0069 | 0.007 | 0.0077 | 0.0086 | 0.0068 | 0.0069 | 0.0041 | 0.004 | 0.0053 | 0.005 | 0.01 | 0.0074 | 0.0091 | 0.0031 | 0.0065 | 0.0045 | 0.0067 | 0.0065 | 0.0065 | 0.0039 | 0.0032 | 0.0111 | 0.0057 | 0.0038 | 0.0041 | 0.0054 |
+| 11_94219111_G_A_b37 | -0.3088 | 94219110 | G | A | ENSG00000020922.12_3 | MRE11 | chr11 | - | 94219089 | 94219250 | 94211926 | 94212042 | 94223998 | 94224131 | 0.6638 | 0.6536 | 0.6856 | 0.6819 | 0.6772 | 0.663 | 0.6898 | 0.6026 | 0.6257 | 0.6386 | 0.6033 | 0.6459 | 0.6592 | 0.6277 | 0.6231 | 0.6148 | 0.6044 | 0.6571 | 0.6444 | 0.6338 | 0.6587 | 0.6448 | 0.6046 | 0.6537 | 0.6442 | 0.7079 | 0.6749 | 0.7007 | 0.6763 | 0.7179 | 0.6368 | 0.6378 | 0.6413 | 0.6335 | 0.617 | 0.6488 | 0.6978 | 0.6295 | 0.6834 | 0.6118 | 0.6382 | 0.6254 | 0.6495 | 0.634 | 0.6476 | 0.6448 | 0.7065 | 0.6524 | 0.5949 | 0.6353 | 0.6318 | 0.6659 | 0.6323 | -0.2699 | -0.291 | -0.2659 | -0.2711 | -0.2926 | -0.2481 | -0.2522 | -0.2341 | -0.2316 | -0.2422 | -0.1817 | -0.1966 | -0.2336 | -0.2216 | -0.2424 | -0.2427 | -0.2299 | -0.2533 | -0.2551 | -0.2626 | -0.2825 | -0.267 | -0.2456 | -0.26 | -0.2511 | -0.2837 | -0.2809 | -0.2862 | -0.29 | -0.2889 | -0.2385 | -0.2929 | -0.2927 | -0.2768 | -0.2721 | -0.277 | -0.3088 | -0.2675 | -0.2598 | -0.2386 | -0.2582 | -0.2233 | -0.2631 | -0.295 | -0.2874 | -0.2693 | -0.2693 | -0.2738 | -0.1693 | -0.2674 | -0.2393 | -0.2776 | -0.2531 |
+| 11_94219111_G_A_b37 | -0.1013 | 94219110 | G | A | ENSG00000020922.12_3 | MRE11 | chr11 | - | 94219089 | 94219250 | 94212839 | 94212927 | 94223998 | 94224131 | 0.9452 | 0.9504 | 0.9496 | 0.9448 | 0.9501 | 0.9352 | 0.9349 | 0.9195 | 0.9189 | 0.9231 | 0.8398 | 0.8669 | 0.9194 | 0.9218 | 0.9202 | 0.9276 | 0.9138 | 0.925 | 0.9199 | 0.933 | 0.937 | 0.9471 | 0.9195 | 0.9186 | 0.9134 | 0.9394 | 0.9472 | 0.9449 | 0.9407 | 0.9479 | 0.9131 | 0.9509 | 0.9482 | 0.9348 | 0.942 | 0.9358 | 0.9514 | 0.9478 | 0.9116 | 0.8988 | 0.9391 | 0.9166 | 0.9259 | 0.9332 | 0.936 | 0.9393 | 0.9382 | 0.9446 | 0.8534 | 0.9086 | 0.9058 | 0.9261 | 0.9238 | -0.0605 | -0.0604 | -0.0609 | -0.0629 | -0.0567 | -0.0683 | -0.0668 | -0.0792 | -0.0691 | -0.0688 | -0.1013 | -0.0878 | -0.0623 | -0.0629 | -0.0751 | -0.0688 | -0.0777 | -0.0713 | -0.0702 | -0.0727 | -0.0709 | -0.0665 | -0.0918 | -0.0841 | -0.0879 | -0.0723 | -0.0653 | -0.0677 | -0.0707 | -0.0617 | -0.0818 | -0.0613 | -0.0626 | -0.0698 | -0.0754 | -0.0672 | -0.0562 | -0.0565 | -0.0849 | -0.0851 | -0.0608 | -0.0802 | -0.0812 | -0.0712 | -0.07 | -0.0669 | -0.0623 | -0.0641 | -0.0984 | -0.0952 | -0.0886 | -0.0737 | -0.0772 |
+| 11_94219111_G_A_b37 | -0.0933 | 94219110 | G | A | ENSG00000020922.12_3 | MRE11 | chr11 | - | 94219089 | 94219250 | 94212860 | 94212927 | 94223998 | 94224131 | 0.9513 | 0.9545 | 0.9557 | 0.9509 | 0.9555 | 0.9426 | 0.9434 | 0.925 | 0.9266 | 0.9294 | 0.8528 | 0.8779 | 0.9236 | 0.9264 | 0.9268 | 0.9332 | 0.9212 | 0.9325 | 0.9294 | 0.9385 | 0.9426 | 0.9548 | 0.9253 | 0.9277 | 0.9229 | 0.947 | 0.952 | 0.9504 | 0.9465 | 0.9534 | 0.9246 | 0.9561 | 0.9542 | 0.9415 | 0.9469 | 0.942 | 0.9563 | 0.9499 | 0.9207 | 0.9095 | 0.9453 | 0.9256 | 0.9316 | 0.9377 | 0.9424 | 0.9443 | 0.9427 | 0.9503 | 0.8643 | 0.9175 | 0.9159 | 0.9344 | 0.9318 | -0.0512 | -0.0493 | -0.0524 | -0.0539 | -0.0484 | -0.0586 | -0.0594 | -0.068 | -0.065 | -0.0619 | -0.0933 | -0.0821 | -0.0589 | -0.0611 | -0.0658 | -0.0618 | -0.0698 | -0.0651 | -0.0617 | -0.064 | -0.0627 | -0.0576 | -0.0824 | -0.0746 | -0.0821 | -0.0625 | -0.0569 | -0.0567 | -0.0621 | -0.0526 | -0.0734 | -0.0513 | -0.0523 | -0.0616 | -0.0667 | -0.0583 | -0.0484 | -0.0519 | -0.077 | -0.077 | -0.0546 | -0.0725 | -0.0691 | -0.0604 | -0.0618 | -0.0596 | -0.0556 | -0.0547 | -0.0921 | -0.0822 | -0.0784 | -0.0641 | -0.0658 |
+| 11_94219111_G_A_b37 | -0.1929 | 94219110 | G | A | ENSG00000020922.12_3 | MRE11 | chr11 | - | 94219089 | 94219250 | 94212908 | 94212927 | 94223998 | 94224131 | 0.864 | 0.8675 | 0.8837 | 0.8767 | 0.88 | 0.8612 | 0.8608 | 0.8504 | 0.8532 | 0.8569 | 0.7744 | 0.8023 | 0.8556 | 0.8453 | 0.856 | 0.8616 | 0.8405 | 0.8638 | 0.8612 | 0.8693 | 0.8606 | 0.8724 | 0.8129 | 0.8446 | 0.8371 | 0.8635 | 0.8807 | 0.8815 | 0.8742 | 0.8876 | 0.835 | 0.8974 | 0.8878 | 0.8679 | 0.8579 | 0.8614 | 0.8962 | 0.8501 | 0.8459 | 0.7855 | 0.8736 | 0.8408 | 0.8603 | 0.8602 | 0.8667 | 0.8651 | 0.8641 | 0.8815 | 0.7505 | 0.8321 | 0.821 | 0.8558 | 0.8272 | -0.1687 | -0.1724 | -0.1308 | -0.1603 | -0.1447 | -0.1541 | -0.1638 | -0.1518 | -0.149 | -0.1384 | -0.1486 | -0.128 | -0.13 | -0.1408 | -0.1432 | -0.1412 | -0.146 | -0.1376 | -0.1521 | -0.1516 | -0.16 | -0.1647 | -0.1929 | -0.1728 | -0.1682 | -0.1625 | -0.152 | -0.1486 | -0.1689 | -0.1445 | -0.1725 | -0.1462 | -0.1429 | -0.1511 | -0.1754 | -0.1551 | -0.1514 | -0.1525 | -0.156 | -0.1641 | -0.1601 | -0.1459 | -0.1468 | -0.1687 | -0.1517 | -0.1579 | -0.1499 | -0.1429 | -0.1479 | -0.1831 | -0.1686 | -0.1756 | -0.1686 |
+| 11_94219111_G_A_b37 | -0.2786 | 94219110 | G | A | ENSG00000020922.12_3 | MRE11 | chr11 | - | 94219089 | 94219250 | 94216935 | 94217005 | 94223998 | 94224131 | 0.746 | 0.7239 | 0.7774 | 0.7793 | 0.7713 | 0.7494 | 0.7751 | 0.7003 | 0.7067 | 0.7127 | 0.6447 | 0.675 | 0.7302 | 0.7074 | 0.7125 | 0.6979 | 0.6819 | 0.7323 | 0.7179 | 0.7223 | 0.7292 | 0.7311 | 0.6801 | 0.7373 | 0.7077 | 0.7742 | 0.7476 | 0.7741 | 0.728 | 0.7808 | 0.7362 | 0.7321 | 0.7466 | 0.7271 | 0.7168 | 0.7074 | 0.7709 | 0.7321 | 0.746 | 0.6566 | 0.7348 | 0.6685 | 0.723 | 0.726 | 0.7359 | 0.7188 | 0.7471 | 0.7514 | 0.6314 | 0.6989 | 0.7036 | 0.7633 | 0.7294 | -0.2665 | -0.2728 | -0.2527 | -0.2608 | -0.277 | -0.2561 | -0.2584 | -0.2248 | -0.2039 | -0.2177 | -0.1693 | -0.1724 | -0.2077 | -0.1986 | -0.2276 | -0.2162 | -0.2054 | -0.2262 | -0.2238 | -0.2302 | -0.2599 | -0.2507 | -0.2331 | -0.2542 | -0.2514 | -0.2473 | -0.2558 | -0.2512 | -0.2532 | -0.2362 | -0.2455 | -0.2534 | -0.2506 | -0.2599 | -0.2664 | -0.2539 | -0.2786 | -0.2363 | -0.2492 | -0.2097 | -0.2409 | -0.2116 | -0.2458 | -0.2756 | -0.2545 | -0.2417 | -0.2241 | -0.2506 | -0.1666 | -0.2518 | -0.241 | -0.2662 | -0.2447 |
+| 13_52535985_A_C_b37 | -0.0765 | 52535984 | A | C | ENSG00000123191.14_3 | ATP7B | chr13 | - | 52535972 | 52536049 | 52531651 | 52534458 | 52539007 | 52539169 | 0.7471 | 0.7419 | 0.8106 | 0.728 | 0.7591 | 0.7099 | 0.7807 | 0.7235 | 0.7304 | 0.7336 | 0.7067 | 0.7061 | 0.7142 | 0.7438 | 0.7308 | 0.7398 | 0.7317 | 0.7393 | 0.7328 | 0.7461 | 0.7545 | 0.7838 | 0.7446 | 0.739 | 0.7467 | 0.7557 | 0.7969 | 0.7315 | 0.7848 | 0.7345 | 0.7595 | 0.7348 | 0.7623 | 0.7653 | 0.761 | 0.7553 | 0.7725 | 0.7774 | 0.717 | 0.7338 | 0.7516 | 0.7538 | 0.7725 | 0.7617 | 0.7481 | 0.7928 | 0.8091 | 0.7585 | 0.748 | 0.7958 | 0.7465 | 0.7501 | 0.7324 | -0.0743 | -0.0705 | -0.0551 | -0.0666 | -0.0658 | -0.0652 | -0.0562 | -0.0648 | -0.0592 | -0.0589 | -0.0501 | -0.0505 | -0.0639 | -0.0551 | -0.0659 | -0.0607 | -0.0562 | -0.0613 | -0.0611 | -0.0633 | -0.068 | -0.0639 | -0.0542 | -0.0712 | -0.0603 | -0.0617 | -0.0527 | -0.0675 | -0.0668 | -0.0739 | -0.057 | -0.076 | -0.0661 | -0.0757 | -0.0765 | -0.0677 | -0.0626 | -0.0591 | -0.0695 | -0.0578 | -0.0639 | -0.0571 | -0.0632 | -0.0606 | -0.0674 | -0.0574 | -0.0631 | -0.064 | -0.053 | -0.0561 | -0.0672 | -0.0647 | -0.0651 |
+| 13_52535985_A_C_b37 | -0.0915 | 52535984 | A | C | ENSG00000123191.14_3 | ATP7B | chr13 | - | 52535972 | 52536049 | 52534283 | 52534458 | 52539007 | 52539169 | 0.7325 | 0.7081 | 0.7872 | 0.6928 | 0.7241 | 0.6823 | 0.7636 | 0.6804 | 0.6891 | 0.7068 | 0.6858 | 0.701 | 0.6891 | 0.7084 | 0.6908 | 0.7107 | 0.7061 | 0.7005 | 0.7113 | 0.7177 | 0.7422 | 0.7534 | 0.6952 | 0.7135 | 0.7322 | 0.7202 | 0.7547 | 0.7157 | 0.7724 | 0.7143 | 0.7385 | 0.7184 | 0.7495 | 0.7385 | 0.7298 | 0.7335 | 0.7675 | 0.7553 | 0.7004 | 0.6698 | 0.703 | 0.7273 | 0.7639 | 0.7437 | 0.7287 | 0.7523 | 0.7876 | 0.7385 | 0.717 | 0.7675 | 0.6957 | 0.7475 | 0.6293 | -0.0884 | -0.0841 | -0.0632 | -0.0815 | -0.0848 | -0.0746 | -0.0747 | -0.0678 | -0.0629 | -0.0677 | -0.055 | -0.0583 | -0.0642 | -0.0605 | -0.0695 | -0.0618 | -0.0661 | -0.0726 | -0.0697 | -0.0702 | -0.0784 | -0.077 | -0.0653 | -0.0753 | -0.0761 | -0.0866 | -0.0749 | -0.0915 | -0.0731 | -0.0899 | -0.0697 | -0.0796 | -0.07 | -0.0801 | -0.0818 | -0.0815 | -0.0738 | -0.0719 | -0.0796 | -0.0671 | -0.0802 | -0.0629 | -0.0685 | -0.0759 | -0.0761 | -0.0746 | -0.0746 | -0.0737 | -0.0615 | -0.0705 | -0.0779 | -0.0811 | -0.079 |
+| 14_73637762_A_G_b37 | -0.0744 | 73637761 | A | G | ENSG00000080815.18_3 | PSEN1 | chr14 | + | 73637504 | 73637755 | 73614650 | 73614814 | 73640273 | 73640402 | 0.9141 | 0.9171 | 0.9357 | 0.9258 | 0.9258 | 0.9213 | 0.9047 | 0.927 | 0.9264 | 0.9297 | 0.8627 | 0.878 | 0.9306 | 0.9281 | 0.929 | 0.9295 | 0.9237 | 0.9344 | 0.921 | 0.9299 | 0.9023 | 0.9279 | 0.9165 | 0.8953 | 0.8927 | 0.9176 | 0.9277 | 0.916 | 0.9244 | 0.9167 | 0.8946 | 0.9426 | 0.9433 | 0.9376 | 0.9367 | 0.9063 | 0.9282 | 0.9438 | 0.8916 | 0.8972 | 0.9326 | 0.9177 | 0.8922 | 0.8962 | 0.898 | 0.9245 | 0.9216 | 0.9414 | 0.8664 | 0.8988 | 0.8847 | 0.8866 | 0.9178 | -0.0509 | -0.0482 | -0.0398 | -0.039 | -0.0389 | -0.0441 | -0.056 | -0.035 | -0.0358 | -0.0345 | -0.0624 | -0.0555 | -0.0348 | -0.0335 | -0.0354 | -0.0368 | -0.0322 | -0.0351 | -0.0455 | -0.0363 | -0.051 | -0.0453 | -0.0591 | -0.0575 | -0.0577 | -0.0492 | -0.0473 | -0.0427 | -0.044 | -0.043 | -0.0534 | -0.0421 | -0.0382 | -0.0447 | -0.051 | -0.0485 | -0.0443 | -0.04 | -0.0585 | -0.0744 | -0.0474 | -0.0487 | -0.0461 | -0.049 | -0.0472 | -0.0493 | -0.0521 | -0.0399 | -0.0579 | -0.0574 | -0.0606 | -0.0533 | -0.0648 |
+| 14_73637762_A_G_b37 | -0.165 | 73637761 | A | G | ENSG00000080815.18_3 | PSEN1 | chr14 | + | 73637504 | 73637755 | 73614674 | 73614802 | 73640273 | 73640352 | 0.8276 | 0.832 | 0.8629 | 0.8516 | 0.8464 | 0.8278 | 0.8079 | 0.8411 | 0.8378 | 0.8555 | 0.7551 | 0.7968 | 0.8499 | 0.8465 | 0.8503 | 0.8467 | 0.8501 | 0.8579 | 0.8269 | 0.8407 | 0.8149 | 0.8062 | 0.803 | 0.8145 | 0.7941 | 0.8332 | 0.8511 | 0.8343 | 0.8461 | 0.8333 | 0.7987 | 0.8677 | 0.8647 | 0.8662 | 0.8569 | 0.8314 | 0.8612 | 0.8576 | 0.8009 | 0.7647 | 0.8437 | 0.8259 | 0.8057 | 0.7975 | 0.7948 | 0.8394 | 0.8159 | 0.8622 | 0.7273 | 0.7881 | 0.776 | 0.8051 | 0.8173 | -0.1318 | -0.14 | -0.1202 | -0.1193 | -0.1146 | -0.1312 | -0.1437 | -0.1331 | -0.1081 | -0.1062 | -0.1119 | -0.1151 | -0.1025 | -0.0975 | -0.122 | -0.1162 | -0.1059 | -0.1098 | -0.1278 | -0.1135 | -0.1472 | -0.165 | -0.1546 | -0.1422 | -0.1326 | -0.1277 | -0.1402 | -0.1268 | -0.1328 | -0.1209 | -0.125 | -0.123 | -0.1047 | -0.1166 | -0.1223 | -0.1284 | -0.1161 | -0.1213 | -0.1523 | -0.159 | -0.1123 | -0.1242 | -0.1205 | -0.1248 | -0.128 | -0.1298 | -0.1328 | -0.1142 | -0.1187 | -0.1231 | -0.1387 | -0.1349 | -0.1524 |
+| 14_73637762_A_G_b37 | -0.1512 | 73637761 | A | G | ENSG00000080815.18_3 | PSEN1 | chr14 | + | 73637504 | 73637755 | 73614674 | 73614802 | 73640273 | 73640388 | 0.8334 | 0.8402 | 0.874 | 0.8563 | 0.8535 | 0.8368 | 0.8181 | 0.8482 | 0.8443 | 0.8578 | 0.7791 | 0.8115 | 0.8591 | 0.8537 | 0.8535 | 0.8563 | 0.8535 | 0.8597 | 0.8342 | 0.8465 | 0.8195 | 0.8236 | 0.8189 | 0.8166 | 0.8086 | 0.8448 | 0.8581 | 0.8466 | 0.8571 | 0.8452 | 0.8096 | 0.8723 | 0.8735 | 0.8727 | 0.8582 | 0.8418 | 0.8688 | 0.8612 | 0.8105 | 0.7897 | 0.8487 | 0.8395 | 0.8137 | 0.8112 | 0.8109 | 0.8497 | 0.8285 | 0.8692 | 0.7444 | 0.803 | 0.7867 | 0.8023 | 0.8149 | -0.1236 | -0.1326 | -0.107 | -0.112 | -0.1139 | -0.1239 | -0.137 | -0.1262 | -0.1038 | -0.1027 | -0.1053 | -0.106 | -0.0948 | -0.0883 | -0.1148 | -0.1094 | -0.0939 | -0.1029 | -0.124 | -0.1112 | -0.1308 | -0.1495 | -0.1444 | -0.1264 | -0.1266 | -0.1225 | -0.1391 | -0.117 | -0.1333 | -0.1167 | -0.1193 | -0.1205 | -0.1053 | -0.1172 | -0.117 | -0.114 | -0.1127 | -0.1155 | -0.1412 | -0.1512 | -0.1166 | -0.1117 | -0.1124 | -0.119 | -0.1258 | -0.1269 | -0.1213 | -0.1179 | -0.1135 | -0.1168 | -0.1309 | -0.1233 | -0.1418 |
+| 14_73637762_A_G_b37 | -0.0755 | 73637761 | A | G | ENSG00000080815.18_3 | PSEN1 | chr14 | + | 73637504 | 73637755 | 73614674 | 73614802 | 73640273 | 73640415 | 0.9074 | 0.9104 | 0.9261 | 0.9212 | 0.9216 | 0.9155 | 0.8986 | 0.9225 | 0.9224 | 0.926 | 0.8545 | 0.8698 | 0.9265 | 0.9244 | 0.9253 | 0.9266 | 0.9199 | 0.9294 | 0.9146 | 0.9238 | 0.8964 | 0.9242 | 0.9052 | 0.8916 | 0.8881 | 0.9131 | 0.9199 | 0.9117 | 0.9164 | 0.912 | 0.8888 | 0.9366 | 0.938 | 0.9281 | 0.9309 | 0.903 | 0.9203 | 0.9373 | 0.8863 | 0.8859 | 0.9265 | 0.9097 | 0.8879 | 0.8885 | 0.8906 | 0.9164 | 0.911 | 0.9331 | 0.8555 | 0.8938 | 0.8804 | 0.8812 | 0.9092 | -0.0518 | -0.053 | -0.0433 | -0.0457 | -0.0423 | -0.0506 | -0.0603 | -0.0411 | -0.041 | -0.0382 | -0.0683 | -0.0604 | -0.0435 | -0.036 | -0.0397 | -0.0412 | -0.0364 | -0.039 | -0.0508 | -0.0403 | -0.0547 | -0.0521 | -0.0638 | -0.0603 | -0.0637 | -0.0511 | -0.0499 | -0.0453 | -0.0509 | -0.0463 | -0.0567 | -0.0499 | -0.0434 | -0.0511 | -0.0555 | -0.0488 | -0.0485 | -0.0462 | -0.0606 | -0.0755 | -0.0486 | -0.0543 | -0.0499 | -0.0488 | -0.0496 | -0.052 | -0.0576 | -0.0426 | -0.0655 | -0.0559 | -0.0654 | -0.0537 | -0.0724 |
+| 14_73637762_A_G_b37 | -0.0739 | 73637761 | A | G | ENSG00000080815.18_3 | PSEN1 | chr14 | + | 73637504 | 73637755 | 73614674 | 73614814 | 73640273 | 73640415 | 0.9092 | 0.9107 | 0.9266 | 0.9208 | 0.9204 | 0.9183 | 0.8988 | 0.9235 | 0.9226 | 0.9266 | 0.8549 | 0.8721 | 0.9287 | 0.9262 | 0.9261 | 0.9279 | 0.9202 | 0.9299 | 0.9168 | 0.9256 | 0.8978 | 0.9248 | 0.9091 | 0.8912 | 0.8876 | 0.913 | 0.9188 | 0.912 | 0.9175 | 0.9127 | 0.8879 | 0.9372 | 0.9387 | 0.9283 | 0.9292 | 0.9024 | 0.9195 | 0.9395 | 0.8864 | 0.8857 | 0.9251 | 0.9083 | 0.8899 | 0.8888 | 0.8905 | 0.9158 | 0.9103 | 0.933 | 0.858 | 0.8909 | 0.8799 | 0.881 | 0.9094 | -0.0512 | -0.0501 | -0.0448 | -0.0429 | -0.0401 | -0.0481 | -0.0614 | -0.0392 | -0.0386 | -0.037 | -0.065 | -0.0601 | -0.0408 | -0.0349 | -0.0387 | -0.0388 | -0.0348 | -0.0364 | -0.0478 | -0.037 | -0.0513 | -0.0498 | -0.0638 | -0.0595 | -0.0633 | -0.0508 | -0.051 | -0.0462 | -0.0477 | -0.0459 | -0.0558 | -0.049 | -0.0451 | -0.0496 | -0.0557 | -0.0491 | -0.0488 | -0.0448 | -0.0617 | -0.0739 | -0.048 | -0.0502 | -0.0505 | -0.0493 | -0.0497 | -0.0519 | -0.0569 | -0.0416 | -0.0627 | -0.0553 | -0.0646 | -0.0516 | -0.0715 |
+| 14_73637762_A_G_b37 | -0.1415 | 73637761 | A | G | ENSG00000080815.18_3 | PSEN1 | chr14 | + | 73637504 | 73637755 | 73614674 | 73614814 | 73640273 | 73640912 | 0.8602 | 0.8583 | 0.8798 | 0.8683 | 0.8753 | 0.866 | 0.8497 | 0.8726 | 0.8786 | 0.8794 | 0.7648 | 0.8009 | 0.8782 | 0.876 | 0.8774 | 0.8765 | 0.8766 | 0.8821 | 0.854 | 0.8746 | 0.8399 | 0.8666 | 0.8465 | 0.8082 | 0.8097 | 0.8585 | 0.874 | 0.8535 | 0.8643 | 0.8613 | 0.8247 | 0.8735 | 0.8829 | 0.8647 | 0.8752 | 0.8535 | 0.877 | 0.8816 | 0.8458 | 0.7932 | 0.8775 | 0.8477 | 0.8395 | 0.8278 | 0.8361 | 0.8767 | 0.8671 | 0.8855 | 0.7845 | 0.8299 | 0.8025 | 0.8244 | 0.8413 | -0.103 | -0.098 | -0.0923 | -0.1066 | -0.1089 | -0.1074 | -0.1173 | -0.1032 | -0.0947 | -0.085 | -0.0942 | -0.107 | -0.0911 | -0.0868 | -0.0991 | -0.0923 | -0.0837 | -0.089 | -0.1163 | -0.0996 | -0.114 | -0.1141 | -0.1184 | -0.1336 | -0.1415 | -0.1069 | -0.1 | -0.0993 | -0.1044 | -0.1018 | -0.1178 | -0.1025 | -0.0967 | -0.0997 | -0.1041 | -0.0928 | -0.0983 | -0.0976 | -0.0947 | -0.1404 | -0.0929 | -0.0965 | -0.1044 | -0.1049 | -0.1082 | -0.0914 | -0.086 | -0.0936 | -0.1066 | -0.1023 | -0.1216 | -0.1172 | -0.1248 |
+| 14_73637762_A_G_b37 | -0.079 | 73637761 | A | G | ENSG00000080815.18_3 | PSEN1 | chr14 | + | 73637504 | 73637755 | 73614727 | 73614802 | 73640273 | 73640415 | 0.8986 | 0.898 | 0.9162 | 0.9095 | 0.912 | 0.9098 | 0.891 | 0.9112 | 0.9132 | 0.9151 | 0.845 | 0.8565 | 0.9179 | 0.9173 | 0.915 | 0.9182 | 0.9092 | 0.9176 | 0.9034 | 0.9126 | 0.887 | 0.9184 | 0.8932 | 0.8866 | 0.882 | 0.9058 | 0.9062 | 0.9033 | 0.9 | 0.9042 | 0.8833 | 0.9248 | 0.9261 | 0.9145 | 0.9229 | 0.8947 | 0.9073 | 0.9244 | 0.8799 | 0.8704 | 0.917 | 0.9017 | 0.8813 | 0.8728 | 0.8757 | 0.9031 | 0.8981 | 0.9164 | 0.8451 | 0.8821 | 0.8768 | 0.8687 | 0.8907 | -0.0561 | -0.059 | -0.0528 | -0.0533 | -0.0483 | -0.0545 | -0.0675 | -0.0484 | -0.0437 | -0.0425 | -0.0701 | -0.0631 | -0.0442 | -0.038 | -0.0464 | -0.0423 | -0.0403 | -0.0444 | -0.0542 | -0.048 | -0.0585 | -0.0604 | -0.0683 | -0.0661 | -0.0634 | -0.0591 | -0.0585 | -0.0494 | -0.0585 | -0.0516 | -0.0597 | -0.0573 | -0.0546 | -0.0569 | -0.0568 | -0.0515 | -0.0582 | -0.0545 | -0.0684 | -0.0747 | -0.0539 | -0.0576 | -0.0559 | -0.0561 | -0.0558 | -0.0597 | -0.0588 | -0.0474 | -0.0695 | -0.0591 | -0.0674 | -0.057 | -0.079 |
+| 14_73637762_A_G_b37 | -0.075 | 73637761 | A | G | ENSG00000080815.18_3 | PSEN1 | chr14 | + | 73637504 | 73637755 | 73614727 | 73614814 | 73640273 | 73640415 | 0.9013 | 0.8997 | 0.9163 | 0.9108 | 0.9128 | 0.9141 | 0.8927 | 0.915 | 0.9162 | 0.9181 | 0.8474 | 0.8613 | 0.9218 | 0.9202 | 0.9177 | 0.9216 | 0.9123 | 0.9195 | 0.9087 | 0.9171 | 0.8901 | 0.9176 | 0.9001 | 0.8858 | 0.8821 | 0.9071 | 0.9054 | 0.9043 | 0.9048 | 0.9064 | 0.883 | 0.9269 | 0.9269 | 0.9155 | 0.9222 | 0.8955 | 0.906 | 0.9303 | 0.8787 | 0.8724 | 0.9144 | 0.9006 | 0.8823 | 0.8755 | 0.8773 | 0.9031 | 0.897 | 0.9185 | 0.8502 | 0.8799 | 0.8777 | 0.8714 | 0.8919 | -0.0526 | -0.0538 | -0.0529 | -0.0523 | -0.0457 | -0.0518 | -0.0661 | -0.0453 | -0.0429 | -0.0406 | -0.0676 | -0.0623 | -0.0434 | -0.0358 | -0.0437 | -0.0413 | -0.0388 | -0.0393 | -0.0519 | -0.0431 | -0.0556 | -0.0554 | -0.0676 | -0.0615 | -0.064 | -0.0555 | -0.0583 | -0.0518 | -0.0529 | -0.0535 | -0.06 | -0.056 | -0.055 | -0.0523 | -0.0553 | -0.0517 | -0.0525 | -0.0536 | -0.0663 | -0.075 | -0.0528 | -0.0517 | -0.055 | -0.0528 | -0.0537 | -0.0579 | -0.0574 | -0.0456 | -0.0661 | -0.0595 | -0.0674 | -0.0535 | -0.074 |
+| 14_73637762_A_G_b37 | -0.2253 | 73637761 | A | G | ENSG00000080815.18_3 | PSEN1 | chr14 | + | 73637504 | 73637755 | 73626716 | 73626846 | 73640273 | 73640415 | 0.5149 | 0.4839 | 0.5241 | 0.5185 | 0.4904 | 0.4966 | 0.5222 | 0.4668 | 0.4756 | 0.4929 | 0.5082 | 0.5629 | 0.5014 | 0.4838 | 0.4646 | 0.452 | 0.4877 | 0.4894 | 0.4644 | 0.4764 | 0.5003 | 0.403 | 0.4704 | 0.5116 | 0.5069 | 0.4691 | 0.4683 | 0.4578 | 0.5242 | 0.4554 | 0.5267 | 0.4775 | 0.4974 | 0.4972 | 0.5066 | 0.5236 | 0.5071 | 0.4771 | 0.5374 | 0.5203 | 0.5242 | 0.572 | 0.5267 | 0.4944 | 0.4886 | 0.5066 | 0.5319 | 0.5158 | 0.4835 | 0.5561 | 0.4583 | 0.4832 | 0.4454 | -0.2052 | -0.201 | -0.2092 | -0.2253 | -0.2069 | -0.2045 | -0.2159 | -0.1952 | -0.1873 | -0.1983 | -0.1391 | -0.1556 | -0.1924 | -0.1781 | -0.1921 | -0.1753 | -0.1877 | -0.194 | -0.1903 | -0.1956 | -0.1941 | -0.1654 | -0.1749 | -0.2034 | -0.1916 | -0.1873 | -0.1993 | -0.1879 | -0.2167 | -0.186 | -0.2066 | -0.1996 | -0.2042 | -0.2045 | -0.2071 | -0.2003 | -0.2025 | -0.1934 | -0.2013 | -0.1988 | -0.1937 | -0.1884 | -0.1988 | -0.1822 | -0.1749 | -0.1992 | -0.1853 | -0.2123 | -0.1301 | -0.1965 | -0.1687 | -0.1926 | -0.1826 |
+| 14_73637762_A_G_b37 | -0.1409 | 73637761 | A | G | ENSG00000080815.18_3 | PSEN1 | chr14 | + | 73637504 | 73637755 | 73634536 | 73636169 | 73640273 | 73640415 | 0.8325 | 0.8221 | 0.8569 | 0.8471 | 0.8505 | 0.8284 | 0.8273 | 0.8112 | 0.8202 | 0.8237 | 0.76 | 0.8007 | 0.823 | 0.813 | 0.8123 | 0.8089 | 0.812 | 0.8206 | 0.8121 | 0.8189 | 0.8253 | 0.8076 | 0.8298 | 0.83 | 0.8169 | 0.8329 | 0.8335 | 0.8403 | 0.8517 | 0.8374 | 0.8168 | 0.8173 | 0.8319 | 0.8384 | 0.8254 | 0.8348 | 0.8544 | 0.8273 | 0.8107 | 0.8065 | 0.8252 | 0.8414 | 0.8451 | 0.8082 | 0.8236 | 0.8482 | 0.846 | 0.8437 | 0.7575 | 0.834 | 0.8003 | 0.8306 | 0.8194 | -0.1122 | -0.1311 | -0.1205 | -0.1143 | -0.1148 | -0.1152 | -0.1225 | -0.1285 | -0.1168 | -0.1138 | -0.0937 | -0.1012 | -0.116 | -0.1081 | -0.1276 | -0.1225 | -0.1071 | -0.1119 | -0.1334 | -0.1208 | -0.1264 | -0.1382 | -0.1282 | -0.1341 | -0.1343 | -0.1208 | -0.129 | -0.1109 | -0.1241 | -0.1163 | -0.1341 | -0.1262 | -0.1153 | -0.1101 | -0.1323 | -0.104 | -0.1094 | -0.1256 | -0.1178 | -0.124 | -0.1085 | -0.103 | -0.1095 | -0.1161 | -0.1105 | -0.1079 | -0.1034 | -0.1118 | -0.0959 | -0.1092 | -0.1347 | -0.1234 | -0.1409 |
+| 16_2098764_C_G_b37 | -0.1324 | 2098763 | C | G | ENSG00000103197.16_3 | TSC2 | chr16 | + | 2098587 | 2098754 | 2097465 | 2098066 | 2100400 | 2100487 | 0.9324 | 0.9316 | 0.9438 | 0.9414 | 0.9382 | 0.9315 | 0.9404 | 0.9172 | 0.9193 | 0.9189 | 0.8725 | 0.8819 | 0.9059 | 0.9089 | 0.9174 | 0.9229 | 0.9112 | 0.923 | 0.9271 | 0.9274 | 0.9306 | 0.9333 | 0.9303 | 0.9284 | 0.9277 | 0.9303 | 0.9435 | 0.9378 | 0.9453 | 0.9388 | 0.9252 | 0.9336 | 0.9375 | 0.9423 | 0.9341 | 0.9354 | 0.9476 | 0.9329 | 0.9243 | 0.9137 | 0.9468 | 0.9224 | 0.9408 | 0.9313 | 0.9335 | 0.9404 | 0.9403 | 0.9473 | 0.8844 | 0.9355 | 0.9149 | 0.9344 | 0.9279 | -0.0939 | -0.0974 | -0.0979 | -0.0931 | -0.0901 | -0.0973 | -0.087 | -0.1039 | -0.1132 | -0.097 | -0.1193 | -0.1137 | -0.1154 | -0.13 | -0.1 | -0.1121 | -0.1063 | -0.0966 | -0.1096 | -0.0971 | -0.0974 | -0.1324 | -0.1067 | -0.094 | -0.0968 | -0.0982 | -0.1041 | -0.0999 | -0.0888 | -0.099 | -0.117 | -0.0888 | -0.0871 | -0.0853 | -0.1052 | -0.0967 | -0.0874 | -0.099 | -0.1165 | -0.1058 | -0.0969 | -0.0998 | -0.0898 | -0.1153 | -0.1068 | -0.0951 | -0.0943 | -0.0791 | -0.1141 | -0.1043 | -0.1098 | -0.098 | -0.102 |
+| 16_2098764_C_G_b37 | -0.1268 | 2098763 | C | G | ENSG00000103197.16_3 | TSC2 | chr16 | + | 2098587 | 2098754 | 2097989 | 2098066 | 2100400 | 2100487 | 0.9285 | 0.9246 | 0.9322 | 0.9371 | 0.932 | 0.9286 | 0.9402 | 0.9013 | 0.8955 | 0.8993 | 0.8703 | 0.8833 | 0.8827 | 0.8905 | 0.9014 | 0.9049 | 0.8905 | 0.9057 | 0.9096 | 0.9148 | 0.923 | 0.9303 | 0.9313 | 0.9286 | 0.9294 | 0.9309 | 0.9453 | 0.9328 | 0.9354 | 0.9335 | 0.9198 | 0.9243 | 0.9291 | 0.9339 | 0.9266 | 0.9276 | 0.9493 | 0.9236 | 0.9221 | 0.9148 | 0.939 | 0.9199 | 0.9306 | 0.9275 | 0.9282 | 0.9417 | 0.9396 | 0.9404 | 0.8888 | 0.9319 | 0.922 | 0.9319 | 0.9244 | -0.0873 | -0.0974 | -0.109 | -0.0951 | -0.0954 | -0.1006 | -0.0788 | -0.11 | -0.1112 | -0.1 | -0.1175 | -0.1063 | -0.1113 | -0.123 | -0.106 | -0.1096 | -0.1083 | -0.0996 | -0.107 | -0.1026 | -0.0897 | -0.1268 | -0.1008 | -0.0956 | -0.0944 | -0.0952 | -0.1043 | -0.0914 | -0.0918 | -0.095 | -0.108 | -0.1009 | -0.1016 | -0.0926 | -0.106 | -0.0924 | -0.0862 | -0.1084 | -0.1108 | -0.0969 | -0.1015 | -0.1047 | -0.0958 | -0.0991 | -0.1017 | -0.0966 | -0.0927 | -0.0845 | -0.1032 | -0.1056 | -0.0958 | -0.0898 | -0.1009 |
+| 16_2098764_C_G_b37 | -0.127 | 2098763 | C | G | ENSG00000103197.16_3 | TSC2 | chr16 | + | 2098587 | 2098754 | 2097990 | 2098066 | 2100400 | 2100487 | 0.9284 | 0.9241 | 0.9321 | 0.9372 | 0.9318 | 0.9291 | 0.9401 | 0.9005 | 0.8948 | 0.8988 | 0.8705 | 0.8831 | 0.8817 | 0.8902 | 0.9011 | 0.904 | 0.8902 | 0.9051 | 0.9096 | 0.9144 | 0.9232 | 0.9307 | 0.9319 | 0.9285 | 0.9298 | 0.9309 | 0.9452 | 0.933 | 0.9347 | 0.9334 | 0.92 | 0.9238 | 0.9288 | 0.9337 | 0.9257 | 0.9271 | 0.9487 | 0.9241 | 0.9232 | 0.9149 | 0.9384 | 0.9197 | 0.9308 | 0.9275 | 0.928 | 0.9411 | 0.9393 | 0.9397 | 0.8889 | 0.9321 | 0.9223 | 0.9316 | 0.924 | -0.0878 | -0.0992 | -0.1097 | -0.0963 | -0.0964 | -0.1019 | -0.0798 | -0.1117 | -0.112 | -0.1009 | -0.1164 | -0.105 | -0.112 | -0.1246 | -0.1075 | -0.1109 | -0.1089 | -0.101 | -0.1066 | -0.1042 | -0.0909 | -0.127 | -0.1012 | -0.0954 | -0.0956 | -0.0968 | -0.1051 | -0.0933 | -0.092 | -0.0963 | -0.1086 | -0.1028 | -0.1034 | -0.094 | -0.1084 | -0.0928 | -0.0871 | -0.1095 | -0.1117 | -0.0966 | -0.1028 | -0.1055 | -0.0973 | -0.0998 | -0.102 | -0.0975 | -0.0931 | -0.0864 | -0.1027 | -0.1069 | -0.0961 | -0.0905 | -0.1023 |
+| 16_2098764_C_G_b37 | -0.1343 | 2098763 | C | G | ENSG00000103197.16_3 | TSC2 | chr16 | + | 2098587 | 2098754 | 2098014 | 2098066 | 2100400 | 2100487 | 0.923 | 0.9249 | 0.9289 | 0.9319 | 0.9274 | 0.9268 | 0.9352 | 0.8992 | 0.8993 | 0.9019 | 0.866 | 0.8771 | 0.8844 | 0.8912 | 0.9014 | 0.9037 | 0.8909 | 0.9094 | 0.9122 | 0.914 | 0.9193 | 0.9243 | 0.9219 | 0.9226 | 0.9271 | 0.9269 | 0.9418 | 0.9313 | 0.9345 | 0.9317 | 0.9147 | 0.9252 | 0.9295 | 0.9331 | 0.9259 | 0.9242 | 0.9458 | 0.9279 | 0.9218 | 0.9091 | 0.9391 | 0.9177 | 0.9266 | 0.9234 | 0.9246 | 0.9404 | 0.9389 | 0.9392 | 0.8758 | 0.9297 | 0.9136 | 0.926 | 0.9251 | -0.0945 | -0.104 | -0.1185 | -0.0997 | -0.1012 | -0.1098 | -0.087 | -0.1094 | -0.1123 | -0.0992 | -0.1247 | -0.1126 | -0.1076 | -0.1267 | -0.1038 | -0.1083 | -0.1096 | -0.0966 | -0.1095 | -0.0983 | -0.0961 | -0.1343 | -0.1139 | -0.1035 | -0.1044 | -0.0977 | -0.1088 | -0.0988 | -0.0988 | -0.102 | -0.1138 | -0.102 | -0.0967 | -0.0964 | -0.1052 | -0.0984 | -0.0897 | -0.1118 | -0.1223 | -0.1057 | -0.104 | -0.1085 | -0.1005 | -0.1086 | -0.1085 | -0.0992 | -0.0901 | -0.0863 | -0.112 | -0.1183 | -0.1102 | -0.1016 | -0.1004 |
+| 16_2098764_C_G_b37 | -0.1271 | 2098763 | C | G | ENSG00000103197.16_3 | TSC2 | chr16 | + | 2098587 | 2098754 | 2098020 | 2098066 | 2100400 | 2100487 | 0.9263 | 0.9253 | 0.9279 | 0.9353 | 0.9316 | 0.9287 | 0.9407 | 0.9023 | 0.9003 | 0.9038 | 0.8702 | 0.8793 | 0.885 | 0.8891 | 0.9046 | 0.9064 | 0.8924 | 0.9098 | 0.914 | 0.9172 | 0.9226 | 0.9301 | 0.9247 | 0.9266 | 0.93 | 0.93 | 0.9427 | 0.933 | 0.9363 | 0.9335 | 0.9201 | 0.9241 | 0.9295 | 0.9341 | 0.9264 | 0.9264 | 0.9463 | 0.9276 | 0.9229 | 0.9135 | 0.9408 | 0.9195 | 0.9274 | 0.9249 | 0.9263 | 0.9419 | 0.9412 | 0.9395 | 0.8809 | 0.9307 | 0.9191 | 0.9279 | 0.9263 | -0.0889 | -0.1002 | -0.1131 | -0.095 | -0.0953 | -0.1017 | -0.0832 | -0.1075 | -0.1067 | -0.099 | -0.1212 | -0.1054 | -0.1034 | -0.121 | -0.1028 | -0.1079 | -0.1048 | -0.0959 | -0.109 | -0.095 | -0.0906 | -0.1271 | -0.1076 | -0.0978 | -0.0987 | -0.0939 | -0.1046 | -0.0939 | -0.0955 | -0.0985 | -0.1075 | -0.0998 | -0.0963 | -0.0934 | -0.1011 | -0.0928 | -0.0845 | -0.1105 | -0.1123 | -0.0985 | -0.1018 | -0.1023 | -0.0958 | -0.1055 | -0.1035 | -0.0943 | -0.086 | -0.0825 | -0.1067 | -0.1132 | -0.1005 | -0.093 | -0.0977 |
+| 16_2098764_C_G_b37 | -0.1339 | 2098763 | C | G | ENSG00000103197.16_3 | TSC2 | chr16 | + | 2098587 | 2098754 | 2098033 | 2098066 | 2100400 | 2100487 | 0.9209 | 0.9131 | 0.9119 | 0.9287 | 0.922 | 0.9196 | 0.9333 | 0.8968 | 0.8879 | 0.8993 | 0.8618 | 0.8743 | 0.8719 | 0.8771 | 0.8988 | 0.8961 | 0.8869 | 0.906 | 0.9108 | 0.9109 | 0.9167 | 0.9244 | 0.921 | 0.9181 | 0.9221 | 0.926 | 0.9397 | 0.9282 | 0.9248 | 0.9262 | 0.9092 | 0.9172 | 0.9206 | 0.9209 | 0.9113 | 0.9174 | 0.9398 | 0.9115 | 0.9176 | 0.898 | 0.9301 | 0.9039 | 0.917 | 0.9179 | 0.9204 | 0.9386 | 0.9351 | 0.9335 | 0.8801 | 0.915 | 0.9138 | 0.9225 | 0.9127 | -0.1063 | -0.1076 | -0.123 | -0.1016 | -0.1002 | -0.1083 | -0.0907 | -0.1155 | -0.1137 | -0.107 | -0.1242 | -0.1082 | -0.1097 | -0.1245 | -0.1081 | -0.1141 | -0.1144 | -0.1076 | -0.1076 | -0.1028 | -0.1034 | -0.1339 | -0.1194 | -0.1053 | -0.1039 | -0.1097 | -0.107 | -0.1061 | -0.0978 | -0.1041 | -0.116 | -0.1151 | -0.1095 | -0.0988 | -0.1087 | -0.1028 | -0.0904 | -0.1145 | -0.1278 | -0.1063 | -0.1122 | -0.1101 | -0.1124 | -0.1108 | -0.1073 | -0.1018 | -0.0926 | -0.0858 | -0.0994 | -0.1176 | -0.108 | -0.107 | -0.1041 |
+| 16_2098764_C_G_b37 | -0.1588 | 2098763 | C | G | ENSG00000103197.16_3 | TSC2 | chr16 | + | 2098587 | 2098754 | 2098202 | 2098274 | 2100400 | 2100487 | 0.936 | 0.9375 | 0.9378 | 0.9306 | 0.934 | 0.9207 | 0.9301 | 0.9075 | 0.9015 | 0.9105 | 0.851 | 0.8649 | 0.8876 | 0.8812 | 0.9065 | 0.8942 | 0.8969 | 0.919 | 0.9111 | 0.9124 | 0.9343 | 0.9158 | 0.9123 | 0.9182 | 0.9197 | 0.9282 | 0.943 | 0.9354 | 0.9459 | 0.9353 | 0.9229 | 0.9295 | 0.9321 | 0.9411 | 0.9359 | 0.9342 | 0.9492 | 0.9221 | 0.9259 | 0.911 | 0.9435 | 0.9276 | 0.9395 | 0.9379 | 0.9404 | 0.9456 | 0.9435 | 0.9508 | 0.864 | 0.9431 | 0.9095 | 0.9355 | 0.936 | -0.0992 | -0.1049 | -0.1169 | -0.1154 | -0.1036 | -0.1094 | -0.1032 | -0.1463 | -0.1483 | -0.1397 | -0.1327 | -0.1374 | -0.1484 | -0.1504 | -0.1424 | -0.1501 | -0.1492 | -0.1426 | -0.1247 | -0.1384 | -0.1027 | -0.1588 | -0.1388 | -0.1014 | -0.1092 | -0.1085 | -0.1077 | -0.1036 | -0.095 | -0.1142 | -0.1075 | -0.1213 | -0.1252 | -0.1125 | -0.1245 | -0.1028 | -0.0894 | -0.1366 | -0.1129 | -0.1166 | -0.1044 | -0.1154 | -0.0896 | -0.0996 | -0.1016 | -0.0889 | -0.0818 | -0.1017 | -0.1125 | -0.1046 | -0.1174 | -0.0895 | -0.1255 |
+| 2_110905531_C_T_b37 | -0.212 | 110905530 | C | T | ENSG00000144061.12_3 | NPHP1 | chr2 | - | 110905492 | 110905603 | 110904329 | 110904412 | 110907758 | 110907833 | 0.7758 | 0.7872 | 0.8415 | 0.7778 | 0.7993 | 0.7818 | 0.8017 | 0.8197 | 0.8343 | 0.8334 | 0.7182 | 0.7391 | 0.8373 | 0.8266 | 0.8341 | 0.8277 | 0.8253 | 0.8325 | 0.8105 | 0.8217 | 0.7844 | 0.7704 | 0.7626 | 0.7654 | 0.7512 | 0.784 | 0.8196 | 0.8025 | 0.8272 | 0.8127 | 0.7874 | 0.8274 | 0.8422 | 0.8438 | 0.8397 | 0.7695 | 0.8175 | 0.8042 | 0.756 | 0.6931 | 0.828 | 0.788 | 0.7918 | 0.8103 | 0.8211 | 0.7893 | 0.7903 | 0.8243 | 0.7273 | 0.7366 | 0.7346 | 0.7811 | 0.7928 | -0.2073 | -0.1943 | -0.1897 | -0.2048 | -0.212 | -0.209 | -0.1955 | -0.1662 | -0.1572 | -0.1486 | -0.1576 | -0.1693 | -0.1381 | -0.1415 | -0.1568 | -0.1523 | -0.1498 | -0.153 | -0.1707 | -0.1642 | -0.2007 | -0.1854 | -0.1927 | -0.1923 | -0.1912 | -0.19 | -0.2038 | -0.2005 | -0.1971 | -0.1906 | -0.1882 | -0.1879 | -0.1752 | -0.1708 | -0.1885 | -0.2108 | -0.1822 | -0.19 | -0.2075 | -0.1762 | -0.1764 | -0.1918 | -0.2055 | -0.1908 | -0.1923 | -0.1976 | -0.1957 | -0.1582 | -0.1702 | -0.2018 | -0.1938 | -0.1914 | -0.1775 |
+| 2_166854706_G_C_b37 | -0.2885 | 166854705 | G | C | ENSG00000144285.17_3 | SCN1A | chr2 | - | 166854547 | 166854685 | 166852522 | 166852627 | 166856232 | 166856286 | 0.7756 | 0.7837 | 0.7956 | 0.7727 | 0.7808 | 0.7448 | 0.7684 | 0.7681 | 0.7593 | 0.7895 | 0.7157 | 0.7424 | 0.7549 | 0.7605 | 0.7767 | 0.7552 | 0.7561 | 0.7932 | 0.7845 | 0.7785 | 0.7697 | 0.7724 | 0.6987 | 0.7309 | 0.7438 | 0.7766 | 0.8157 | 0.7922 | 0.8082 | 0.8148 | 0.7803 | 0.7766 | 0.7926 | 0.7959 | 0.7932 | 0.7706 | 0.8105 | 0.7811 | 0.7802 | 0.6806 | 0.7746 | 0.7571 | 0.7836 | 0.7491 | 0.7573 | 0.809 | 0.8099 | 0.7985 | 0.7039 | 0.7653 | 0.7369 | 0.7531 | 0.755 | -0.2494 | -0.2301 | -0.2569 | -0.2339 | -0.2366 | -0.2583 | -0.2412 | -0.2627 | -0.2518 | -0.2475 | -0.1942 | -0.2055 | -0.2188 | -0.2011 | -0.2649 | -0.2506 | -0.2466 | -0.256 | -0.2514 | -0.2591 | -0.2451 | -0.2643 | -0.2471 | -0.2258 | -0.2459 | -0.2298 | -0.2545 | -0.2503 | -0.2443 | -0.2402 | -0.235 | -0.2679 | -0.2469 | -0.2605 | -0.2874 | -0.2294 | -0.2885 | -0.245 | -0.233 | -0.2597 | -0.2618 | -0.2276 | -0.2293 | -0.2511 | -0.2606 | -0.2445 | -0.214 | -0.2662 | -0.1909 | -0.246 | -0.239 | -0.232 | -0.2609 |
+| 2_166854706_G_C_b37 | -0.2001 | 166854705 | G | C | ENSG00000144285.17_3 | SCN1A | chr2 | - | 166854547 | 166854685 | 166852562 | 166852627 | 166856232 | 166856573 | 0.8691 | 0.8771 | 0.8893 | 0.8789 | 0.8798 | 0.8653 | 0.8662 | 0.8751 | 0.8729 | 0.8731 | 0.7954 | 0.8017 | 0.86 | 0.8556 | 0.8761 | 0.8514 | 0.8617 | 0.8778 | 0.866 | 0.8667 | 0.8573 | 0.8636 | 0.8646 | 0.8483 | 0.863 | 0.8791 | 0.9029 | 0.8838 | 0.9014 | 0.8907 | 0.882 | 0.8645 | 0.8686 | 0.885 | 0.863 | 0.8632 | 0.8998 | 0.8737 | 0.8518 | 0.8272 | 0.8893 | 0.8482 | 0.8832 | 0.8802 | 0.8852 | 0.8997 | 0.8927 | 0.896 | 0.8353 | 0.8868 | 0.8612 | 0.8614 | 0.8787 | -0.1609 | -0.1637 | -0.167 | -0.1481 | -0.1436 | -0.1856 | -0.1785 | -0.1781 | -0.1691 | -0.1723 | -0.1615 | -0.1508 | -0.1593 | -0.1487 | -0.1733 | -0.1768 | -0.1885 | -0.1759 | -0.1785 | -0.1782 | -0.1588 | -0.1998 | -0.1801 | -0.1865 | -0.1665 | -0.1538 | -0.1272 | -0.1527 | -0.15 | -0.1492 | -0.1646 | -0.2001 | -0.195 | -0.1667 | -0.185 | -0.1521 | -0.1509 | -0.1667 | -0.1637 | -0.1913 | -0.155 | -0.1669 | -0.1585 | -0.1427 | -0.1423 | -0.1368 | -0.1428 | -0.1499 | -0.1457 | -0.1585 | -0.1774 | -0.1497 | -0.1708 |
+| 5_112102045_G_T_b37 | -0.4181 | 112102044 | G | T | ENSG00000134982.16_3 | APC | chr5 | + | 112102022 | 112102107 | 112043218 | 112043579 | 112102885 | 112103087 | 0.9709 | 0.9738 | 0.9726 | 0.9705 | 0.972 | 0.9653 | 0.967 | 0.9728 | 0.9694 | 0.9718 | 0.9309 | 0.9372 | 0.9693 | 0.9648 | 0.9731 | 0.9709 | 0.9663 | 0.9743 | 0.9706 | 0.9751 | 0.9706 | 0.9678 | 0.9596 | 0.9692 | 0.9654 | 0.9688 | 0.9774 | 0.9743 | 0.9714 | 0.9756 | 0.9683 | 0.9768 | 0.9754 | 0.9796 | 0.9815 | 0.9696 | 0.9764 | 0.9724 | 0.9673 | 0.9623 | 0.9806 | 0.9637 | 0.9726 | 0.9702 | 0.9698 | 0.9755 | 0.9726 | 0.9798 | 0.9436 | 0.9678 | 0.9631 | 0.9674 | 0.9702 | -0.3412 | -0.3469 | -0.3623 | -0.3958 | -0.3609 | -0.3676 | -0.3464 | -0.3885 | -0.3886 | -0.3446 | -0.3204 | -0.3341 | -0.3393 | -0.349 | -0.3744 | -0.3651 | -0.3539 | -0.3542 | -0.3318 | -0.361 | -0.3377 | -0.3786 | -0.4181 | -0.348 | -0.3531 | -0.3412 | -0.321 | -0.3295 | -0.3913 | -0.3222 | -0.3467 | -0.3581 | -0.3478 | -0.3216 | -0.2959 | -0.3488 | -0.3254 | -0.3417 | -0.3672 | -0.3677 | -0.3139 | -0.274 | -0.2868 | -0.4018 | -0.402 | -0.3211 | -0.3125 | -0.33 | -0.302 | -0.3319 | -0.3815 | -0.3781 | -0.4039 |
+| 5_112102045_G_T_b37 | -0.2126 | 112102044 | G | T | ENSG00000134982.16_3 | APC | chr5 | + | 112102022 | 112102107 | 112090569 | 112090722 | 112102885 | 112103019 | 0.9809 | 0.9811 | 0.9827 | 0.9826 | 0.9835 | 0.9786 | 0.9762 | 0.9781 | 0.974 | 0.9769 | 0.9439 | 0.9507 | 0.9698 | 0.9672 | 0.9782 | 0.974 | 0.9727 | 0.9795 | 0.979 | 0.9788 | 0.9818 | 0.9815 | 0.973 | 0.9791 | 0.9767 | 0.9816 | 0.9835 | 0.9841 | 0.9851 | 0.9856 | 0.9778 | 0.984 | 0.9844 | 0.9829 | 0.9856 | 0.9802 | 0.9837 | 0.9832 | 0.9754 | 0.9763 | 0.9868 | 0.9757 | 0.9795 | 0.9815 | 0.982 | 0.98 | 0.9812 | 0.9852 | 0.9537 | 0.9772 | 0.9751 | 0.978 | 0.9816 | -0.1638 | -0.1756 | -0.159 | -0.1916 | -0.1724 | -0.1813 | -0.1824 | -0.189 | -0.1869 | -0.1736 | -0.2126 | -0.1878 | -0.1656 | -0.1678 | -0.1763 | -0.186 | -0.1859 | -0.1685 | -0.1741 | -0.1751 | -0.1651 | -0.1598 | -0.2 | -0.1958 | -0.1757 | -0.176 | -0.1382 | -0.1719 | -0.1576 | -0.1633 | -0.1776 | -0.1657 | -0.1513 | -0.1545 | -0.1413 | -0.1643 | -0.1558 | -0.1638 | -0.197 | -0.1722 | -0.1311 | -0.135 | -0.157 | -0.1768 | -0.1767 | -0.143 | -0.149 | -0.139 | -0.1903 | -0.1677 | -0.2038 | -0.1839 | -0.1888 |
+| 5_112102045_G_T_b37 | -0.2117 | 112102044 | G | T | ENSG00000134982.16_3 | APC | chr5 | + | 112102022 | 112102107 | 112090569 | 112090722 | 112102885 | 112103087 | 0.9817 | 0.9822 | 0.9837 | 0.9831 | 0.9838 | 0.9789 | 0.9771 | 0.9807 | 0.9765 | 0.9788 | 0.9427 | 0.9489 | 0.9731 | 0.9707 | 0.9804 | 0.9769 | 0.9751 | 0.9816 | 0.9808 | 0.9812 | 0.9824 | 0.9819 | 0.9728 | 0.9791 | 0.9767 | 0.9828 | 0.9845 | 0.9846 | 0.986 | 0.9856 | 0.9769 | 0.9847 | 0.9855 | 0.9856 | 0.9868 | 0.9807 | 0.9855 | 0.9839 | 0.9751 | 0.977 | 0.9878 | 0.9764 | 0.981 | 0.9826 | 0.9831 | 0.9813 | 0.9824 | 0.9867 | 0.9544 | 0.9775 | 0.9752 | 0.9798 | 0.9835 | -0.1609 | -0.1766 | -0.17 | -0.198 | -0.177 | -0.189 | -0.1775 | -0.1872 | -0.1883 | -0.1711 | -0.2117 | -0.1949 | -0.1714 | -0.1716 | -0.1787 | -0.1822 | -0.1828 | -0.1691 | -0.1751 | -0.173 | -0.1645 | -0.1642 | -0.2044 | -0.1988 | -0.1757 | -0.1758 | -0.1408 | -0.1755 | -0.1552 | -0.1612 | -0.179 | -0.1709 | -0.1566 | -0.1592 | -0.147 | -0.1711 | -0.1531 | -0.1676 | -0.1983 | -0.1704 | -0.1303 | -0.1391 | -0.1577 | -0.1739 | -0.1753 | -0.1531 | -0.151 | -0.14 | -0.1914 | -0.1727 | -0.207 | -0.1838 | -0.1891 |
+| 8_68066380_C_G_b37 | -0.1084 | 68066379 | C | G | ENSG00000104218.14_2 | CSPP1 | chr8 | + | 68066258 | 68066371 | 68049690 | 68049838 | 68070681 | 68070831 | 0.9041 | 0.9068 | 0.9213 | 0.9144 | 0.9158 | 0.8918 | 0.8998 | 0.9202 | 0.9176 | 0.9191 | 0.8221 | 0.8395 | 0.9101 | 0.9162 | 0.9192 | 0.925 | 0.917 | 0.9196 | 0.927 | 0.9285 | 0.9086 | 0.9115 | 0.8547 | 0.8959 | 0.8965 | 0.911 | 0.9277 | 0.9053 | 0.9221 | 0.909 | 0.8941 | 0.9274 | 0.9281 | 0.9237 | 0.9201 | 0.891 | 0.9226 | 0.9322 | 0.9016 | 0.8858 | 0.9264 | 0.8806 | 0.888 | 0.9084 | 0.9112 | 0.9204 | 0.9238 | 0.9277 | 0.8439 | 0.8981 | 0.8839 | 0.9072 | 0.8997 | -0.0821 | -0.0807 | -0.0773 | -0.0852 | -0.0856 | -0.0895 | -0.0763 | -0.0639 | -0.0639 | -0.0621 | -0.0929 | -0.0839 | -0.0691 | -0.0689 | -0.0654 | -0.0652 | -0.0621 | -0.0633 | -0.0668 | -0.0633 | -0.0835 | -0.0888 | -0.104 | -0.0843 | -0.0872 | -0.0889 | -0.0746 | -0.0892 | -0.0715 | -0.081 | -0.0815 | -0.0689 | -0.073 | -0.0756 | -0.0763 | -0.0914 | -0.078 | -0.0604 | -0.0873 | -0.0985 | -0.0669 | -0.0932 | -0.1084 | -0.0797 | -0.0756 | -0.074 | -0.0744 | -0.0722 | -0.0894 | -0.1035 | -0.0849 | -0.0807 | -0.0915 |
+| 8_68066380_C_G_b37 | -0.0936 | 68066379 | C | G | ENSG00000104218.14_2 | CSPP1 | chr8 | + | 68066258 | 68066371 | 68062017 | 68062170 | 68070681 | 68070831 | 0.9305 | 0.9361 | 0.9374 | 0.9379 | 0.9399 | 0.913 | 0.9241 | 0.9416 | 0.938 | 0.9406 | 0.8442 | 0.8618 | 0.9341 | 0.935 | 0.9387 | 0.9405 | 0.939 | 0.9413 | 0.9459 | 0.949 | 0.9336 | 0.9319 | 0.8876 | 0.9217 | 0.9207 | 0.9337 | 0.9469 | 0.9325 | 0.9438 | 0.9311 | 0.9222 | 0.9424 | 0.9406 | 0.944 | 0.9431 | 0.9188 | 0.938 | 0.9493 | 0.927 | 0.9059 | 0.9414 | 0.9006 | 0.9228 | 0.9262 | 0.9301 | 0.9421 | 0.9437 | 0.9459 | 0.8462 | 0.927 | 0.9111 | 0.929 | 0.9223 | -0.0544 | -0.0594 | -0.0646 | -0.0636 | -0.0623 | -0.0777 | -0.0616 | -0.0548 | -0.0531 | -0.0507 | -0.0788 | -0.071 | -0.0572 | -0.0545 | -0.0551 | -0.055 | -0.0552 | -0.0518 | -0.0577 | -0.0497 | -0.0577 | -0.0721 | -0.0936 | -0.0735 | -0.0788 | -0.0656 | -0.0571 | -0.0654 | -0.0604 | -0.0607 | -0.0688 | -0.0598 | -0.0598 | -0.062 | -0.0628 | -0.0734 | -0.0645 | -0.048 | -0.0708 | -0.0888 | -0.0617 | -0.0796 | -0.0755 | -0.0671 | -0.06 | -0.0601 | -0.0571 | -0.0585 | -0.0841 | -0.0774 | -0.0804 | -0.0617 | -0.07 |
+| X_135112295_G_A_b37 | -0.204 | 135112294 | G | A | ENSG00000198689.10_3 | SLC9A6 | chrX | + | 135112290 | 135112321 | 135106488 | 135106642 | 135115572 | 135115652 | 0.3728 | 0.3847 | 0.4476 | 0.3724 | 0.3846 | 0.3672 | 0.4182 | 0.395 | 0.4288 | 0.4279 | 0.4523 | 0.4676 | 0.4551 | 0.4421 | 0.4042 | 0.4181 | 0.4253 | 0.4256 | 0.4192 | 0.4107 | 0.379 | 0.3501 | 0.3288 | 0.4004 | 0.409 | 0.3636 | 0.3831 | 0.3685 | 0.436 | 0.3686 | 0.4006 | 0.3767 | 0.4073 | 0.3809 | 0.4095 | 0.4009 | 0.3892 | 0.4539 | 0.4034 | 0.3834 | 0.4257 | 0.4419 | 0.4064 | 0.4353 | 0.4428 | 0.389 | 0.4388 | 0.4047 | 0.4071 | 0.3791 | 0.3663 | 0.4139 | 0.4068 | -0.165 | -0.1612 | -0.1943 | -0.1591 | -0.1676 | -0.1576 | -0.1829 | -0.1606 | -0.166 | -0.1652 | -0.1451 | -0.1606 | -0.1693 | -0.1643 | -0.1616 | -0.1612 | -0.1629 | -0.1698 | -0.1565 | -0.1651 | -0.1628 | -0.1512 | -0.1402 | -0.1571 | -0.1669 | -0.1513 | -0.1736 | -0.1589 | -0.1695 | -0.1539 | -0.1582 | -0.165 | -0.1816 | -0.1666 | -0.1762 | -0.1817 | -0.1669 | -0.1838 | -0.1637 | -0.1587 | -0.1789 | -0.1782 | -0.1791 | -0.2025 | -0.204 | -0.1759 | -0.1752 | -0.1734 | -0.13 | -0.1595 | -0.1455 | -0.1769 | -0.1524 |
+| X_135112295_G_A_b37 | -0.1874 | 135112294 | G | A | ENSG00000198689.10_3 | SLC9A6 | chrX | + | 135112290 | 135112321 | 135106614 | 135106642 | 135122202 | 135122243 | 0.4019 | 0.4063 | 0.4462 | 0.3971 | 0.4093 | 0.4044 | 0.4355 | 0.4249 | 0.4569 | 0.4522 | 0.4109 | 0.4202 | 0.4648 | 0.4696 | 0.4319 | 0.4662 | 0.4618 | 0.454 | 0.4183 | 0.4378 | 0.4004 | 0.3547 | 0.3966 | 0.4029 | 0.4061 | 0.4101 | 0.4088 | 0.3907 | 0.4051 | 0.3837 | 0.4027 | 0.4222 | 0.4753 | 0.4189 | 0.4533 | 0.4103 | 0.4198 | 0.4674 | 0.3855 | 0.3607 | 0.4622 | 0.4246 | 0.4209 | 0.4237 | 0.422 | 0.4277 | 0.4451 | 0.4352 | 0.4392 | 0.3908 | 0.379 | 0.3912 | 0.4567 | -0.1689 | -0.1641 | -0.164 | -0.1631 | -0.1659 | -0.1644 | -0.1619 | -0.1491 | -0.1483 | -0.1389 | -0.1301 | -0.1291 | -0.1526 | -0.151 | -0.1479 | -0.142 | -0.1395 | -0.1527 | -0.1435 | -0.1511 | -0.1654 | -0.1486 | -0.1564 | -0.1556 | -0.1504 | -0.1477 | -0.1597 | -0.1489 | -0.1583 | -0.1445 | -0.1479 | -0.169 | -0.1874 | -0.1536 | -0.1691 | -0.1654 | -0.1633 | -0.1549 | -0.1462 | -0.1382 | -0.1761 | -0.144 | -0.1565 | -0.171 | -0.1689 | -0.1705 | -0.1614 | -0.1526 | -0.1306 | -0.1357 | -0.1305 | -0.1505 | -0.1646 |
+| X_135112295_G_A_b37 | -0.2126 | 135112294 | G | A | ENSG00000198689.10_3 | SLC9A6 | chrX | + | 135112290 | 135112321 | 135111044 | 135111134 | 135115572 | 135115652 | 0.4691 | 0.4679 | 0.5036 | 0.4799 | 0.4977 | 0.4613 | 0.5023 | 0.461 | 0.4685 | 0.4854 | 0.4846 | 0.4866 | 0.4754 | 0.4802 | 0.4658 | 0.4721 | 0.4767 | 0.494 | 0.4983 | 0.4768 | 0.4639 | 0.403 | 0.3944 | 0.4843 | 0.4922 | 0.4727 | 0.4837 | 0.4567 | 0.5076 | 0.4619 | 0.4813 | 0.4689 | 0.4928 | 0.4758 | 0.5026 | 0.497 | 0.5046 | 0.4909 | 0.475 | 0.452 | 0.5321 | 0.4947 | 0.4895 | 0.512 | 0.5188 | 0.4956 | 0.5279 | 0.513 | 0.4663 | 0.4639 | 0.4572 | 0.476 | 0.518 | -0.1959 | -0.1926 | -0.1996 | -0.1833 | -0.1953 | -0.1698 | -0.2009 | -0.1777 | -0.1801 | -0.1761 | -0.1348 | -0.1451 | -0.182 | -0.1782 | -0.1772 | -0.1802 | -0.1732 | -0.1828 | -0.1785 | -0.1874 | -0.189 | -0.1707 | -0.1622 | -0.175 | -0.1848 | -0.1764 | -0.2026 | -0.1771 | -0.1912 | -0.1806 | -0.1774 | -0.1895 | -0.207 | -0.2051 | -0.2037 | -0.1998 | -0.2035 | -0.1921 | -0.1905 | -0.1669 | -0.2066 | -0.1786 | -0.2047 | -0.204 | -0.2057 | -0.2076 | -0.2062 | -0.2069 | -0.1338 | -0.1872 | -0.1635 | -0.1843 | -0.2126 |
+| X_135112295_G_A_b37 | -0.2213 | 135112294 | G | A | ENSG00000198689.10_3 | SLC9A6 | chrX | + | 135112290 | 135112321 | 135111601 | 135112052 | 135115572 | 135115652 | 0.4547 | 0.4363 | 0.4738 | 0.4331 | 0.4556 | 0.4266 | 0.4892 | 0.4123 | 0.4389 | 0.4307 | 0.4776 | 0.5136 | 0.4659 | 0.4781 | 0.4143 | 0.425 | 0.4361 | 0.4301 | 0.4285 | 0.4188 | 0.4527 | 0.4236 | 0.408 | 0.4404 | 0.4545 | 0.4656 | 0.485 | 0.4518 | 0.5094 | 0.4539 | 0.4473 | 0.4284 | 0.4554 | 0.4314 | 0.4929 | 0.4588 | 0.4804 | 0.4532 | 0.4829 | 0.4585 | 0.5024 | 0.4871 | 0.4706 | 0.4943 | 0.51 | 0.4898 | 0.4967 | 0.4721 | 0.4887 | 0.4848 | 0.4524 | 0.4691 | 0.4673 | -0.188 | -0.1777 | -0.1919 | -0.1866 | -0.1908 | -0.168 | -0.2022 | -0.1473 | -0.1552 | -0.15 | -0.1321 | -0.1567 | -0.1611 | -0.1635 | -0.1487 | -0.1551 | -0.1483 | -0.1533 | -0.1585 | -0.1512 | -0.1878 | -0.1821 | -0.1566 | -0.1733 | -0.168 | -0.1769 | -0.1987 | -0.1829 | -0.2149 | -0.179 | -0.1854 | -0.1597 | -0.1722 | -0.1744 | -0.1905 | -0.1981 | -0.2123 | -0.1651 | -0.1866 | -0.1637 | -0.1835 | -0.1794 | -0.1935 | -0.2118 | -0.2213 | -0.2019 | -0.1844 | -0.1852 | -0.1346 | -0.1932 | -0.1602 | -0.1945 | -0.1682 |
+
+### Predicting splicing levels of AS events
+**Option 1.** User-provided AS events
+- The pre-compiled AS events and RBP expression levels across 53 GTEx tissues will be used for prediction.
+- iDARTS can make predictions for SE, A3SS, and A5SS. The format of each AS type can be found in [rmats-turbo](https://github.com/Xinglab/rmats-turbo). More specifically:
+  * Shared columns:
+    * `ID`: rMATS event id
+    * `GeneID`: Gene id
+    * `geneSymbol`: Gene name
+    * `chr`: Chromosome
+    * `strand`: Strand of the gene
+  * SE: `exonStart_0base` `exonEnd` `upstreamES` `upstreamEE` `downstreamES` `downstreamEE`
+    + The inclusion form includes the target exon (`exonStart_0base`, `exonEnd`)
+  * A3SS, A5SS: `longExonStart_0base` `longExonEnd` `shortES` `shortEE` `flankingES` `flankingEE`
+    + The inclusion form includes the long exon (`longExonStart_0base`, `longExonEnd`) instead of the short exon (`shortES` `shortEE`)
+- Process the AS events and make predicts on the AS events
+```bash
+# Build sequence features for user-provided AS events
+./bin/iDARTS build_feature -i ./example/example.SE_events.txt -t SE -o ./example/example.SE_events.feature
+# Predict splicing levels based on the sequence features and RBP expression levels across 53 GTEx tissues
+./bin/iDARTS predict -i ./example/example.SE_events.feature -o ./example/example.SE_events.PSI.txt
+```
+
+**Option 2.** User-provided AS events, and RBP expression levels for specific sample types of interest
+- The preparation of AS events can be found in the above Option 1.
+- iDARTS can make predictions for specific sample types of interest. This is enabled by preparing input gene expression file (TPM values quantified by [Kallisto](https://pachterlab.github.io/kallisto/)).
+- The format of gene expression file:
+  * Column Name
+    + `GeneID`: Gene id
+    + `Sample1,Sample2,Sample3,...`: Expression levels of different samples separated by comma
+- Process the AS events and make predicts on the AS events
+```bash
+# Build sequence features for user-provided AS events
+./bin/iDARTS build_feature -i ./example/example.SE_events.txt -t SE -o ./example/example.SE_events.feature
+# Predict splicing levels based on the sequence features and user-provided RBP expression levels
+./bin/iDARTS predict -i ./example/example.SE_events.feature -e ./example/example.RBP_expression_in_tissues.txt -o ./example/example.SE_events.PSI.txt
+```
+
+#### Output format:
+iDARTS Prediction columns: (Suppose we have three samples with sample name Sample1, Sample2, and Sample3 specified in user-provided RBP expression levels of sample types. When not provided, the RBP expression levels across 53 GTEx tissues will be used.)
+
+* `ID`: AS event ID
+* `Sample1`: The predicted PSI of the target AS event in Sample1
+* `Sample2`: The predicted PSI of the target AS event in Sample2
+* `Sample3`: The predicted PSI of the target AS event in Sample3
+
+Example output:
+
+| ID | Adipose - Subcutaneous | Adipose - Visceral (Omentum) | Adrenal Gland | Artery - Aorta | Artery - Coronary | Artery - Tibial | Bladder | Brain - Amygdala | Brain - Anterior cingulate cortex (BA24) | Brain - Caudate (basal ganglia) | Brain - Cerebellar Hemisphere | Brain - Cerebellum | Brain - Cortex | Brain - Frontal Cortex (BA9) | Brain - Hippocampus | Brain - Hypothalamus | Brain - Nucleus accumbens (basal ganglia) | Brain - Putamen (basal ganglia) | Brain - Spinal cord (cervical c-1) | Brain - Substantia nigra | Breast - Mammary Tissue | Cells - Cultured fibroblasts | Cells - EBV-transformed lymphocytes | Cervix - Ectocervix | Cervix - Endocervix | Colon - Sigmoid | Colon - Transverse | Esophagus - Gastroesophageal Junction | Esophagus - Mucosa | Esophagus - Muscularis | Fallopian Tube | Heart - Atrial Appendage | Heart - Left Ventricle | Kidney - Cortex | Liver | Lung | Minor Salivary Gland | Muscle - Skeletal | Nerve - Tibial | Ovary | Pancreas | Pituitary | Prostate | Skin - Not Sun Exposed (Suprapubic) | Skin - Sun Exposed (Lower leg) | Small Intestine - Terminal Ileum | Spleen | Stomach | Testis | Thyroid | Uterus | Vagina | Whole Blood |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | 0.84968394 | 0.8573682 | 0.85443765 | 0.82785386 | 0.8405348 | 0.83592635 | 0.8288909 | 0.8614947 | 0.8621079 | 0.86819685 | 0.82743853 | 0.82081664 | 0.84860134 | 0.86256295 | 0.86479187 | 0.8665389 | 0.8512182 | 0.8712268 | 0.84598494 | 0.86883926 | 0.85942906 | 0.8509599 | 0.87322223 | 0.8492014 | 0.8481797 | 0.8562976 | 0.8675173 | 0.8551014 | 0.8384222 | 0.84500504 | 0.84326905 | 0.8584442 | 0.8759451 | 0.85840636 | 0.88302743 | 0.8497585 | 0.860178 | 0.8509782 | 0.86537397 | 0.84920055 | 0.8792636 | 0.87121475 | 0.8462427 | 0.8576953 | 0.8551431 | 0.87143594 | 0.8930454 | 0.8750065 | 0.84019804 | 0.87396765 | 0.83557403 | 0.84311163 | 0.87467927 |
+| 2 | 0.83895123 | 0.8343612 | 0.8298761 | 0.82199395 | 0.82192963 | 0.7968263 | 0.8307266 | 0.81800175 | 0.8170125 | 0.8207113 | 0.723578 | 0.75132906 | 0.8097334 | 0.8212083 | 0.8253972 | 0.81627834 | 0.8182904 | 0.8213665 | 0.8375982 | 0.8165619 | 0.8544024 | 0.78678966 | 0.8148767 | 0.8300732 | 0.80908716 | 0.8347909 | 0.8299305 | 0.8374791 | 0.8354722 | 0.8295299 | 0.8236433 | 0.80426395 | 0.797258 | 0.8216505 | 0.83364785 | 0.83438474 | 0.85284644 | 0.79705846 | 0.82240963 | 0.798681 | 0.8464341 | 0.83809835 | 0.8383695 | 0.8355557 | 0.8354534 | 0.83957136 | 0.84319717 | 0.8381713 | 0.76055014 | 0.802122 | 0.8142478 | 0.84807587 | 0.8320872 |
+| 3 | 0.94990903 | 0.9500262 | 0.96086276 | 0.9507657 | 0.9527458 | 0.95124644 | 0.956538 | 0.9448721 | 0.93556434 | 0.9404098 | 0.912032 | 0.91218966 | 0.929809 | 0.92930955 | 0.94656116 | 0.93947124 | 0.932442 | 0.945741 | 0.9508486 | 0.9490776 | 0.9514591 | 0.9571419 | 0.9537283 | 0.9566221 | 0.94590634 | 0.9568837 | 0.9533268 | 0.955526 | 0.95586807 | 0.9550718 | 0.93325883 | 0.94532585 | 0.9507025 | 0.9527365 | 0.9576734 | 0.9438642 | 0.95000553 | 0.9386064 | 0.9389464 | 0.94185716 | 0.9584864 | 0.9386424 | 0.9522991 | 0.9454492 | 0.9452857 | 0.9541873 | 0.9587205 | 0.95456374 | 0.91552055 | 0.9440998 | 0.94690955 | 0.9511154 | 0.9538746 |
+| 4 | 0.66383517 | 0.65358347 | 0.6856481 | 0.68188876 | 0.6772169 | 0.66304415 | 0.6897646 | 0.6025648 | 0.6256563 | 0.63855565 | 0.6032933 | 0.6459148 | 0.65917224 | 0.6277319 | 0.623116 | 0.61480093 | 0.6043807 | 0.65707874 | 0.64441454 | 0.63375884 | 0.658697 | 0.64484483 | 0.6045522 | 0.6537133 | 0.6441805 | 0.7078532 | 0.67487085 | 0.7006858 | 0.67629486 | 0.7179468 | 0.63680744 | 0.6377591 | 0.6413164 | 0.6335269 | 0.61699945 | 0.64880025 | 0.69777286 | 0.6294916 | 0.68338287 | 0.6118497 | 0.6382142 | 0.6253558 | 0.64951193 | 0.6339547 | 0.6476022 | 0.6448241 | 0.70647943 | 0.6524449 | 0.59490335 | 0.63531137 | 0.6318237 | 0.66594946 | 0.6322639 |
+| 5 | 0.94516075 | 0.9504159 | 0.9496317 | 0.9448451 | 0.95014036 | 0.9351665 | 0.9348823 | 0.9194937 | 0.9188514 | 0.9230591 | 0.83977205 | 0.8668829 | 0.91940343 | 0.92177355 | 0.9202 | 0.9276293 | 0.9137637 | 0.9250215 | 0.9198702 | 0.9329916 | 0.93696296 | 0.9471179 | 0.91952944 | 0.9185726 | 0.91343766 | 0.9394409 | 0.947162 | 0.9448663 | 0.9406872 | 0.94791496 | 0.9130702 | 0.9509269 | 0.9482428 | 0.934765 | 0.94196546 | 0.93576896 | 0.9514066 | 0.94778633 | 0.91164625 | 0.8987833 | 0.9390998 | 0.91655445 | 0.9258796 | 0.93320656 | 0.9360073 | 0.9392521 | 0.93816245 | 0.94464225 | 0.85342246 | 0.90863895 | 0.90582675 | 0.92608005 | 0.92377627 |
+| 6 | 0.9512707 | 0.95454043 | 0.955742 | 0.9509466 | 0.95545834 | 0.9426406 | 0.9433716 | 0.9250286 | 0.9265804 | 0.9293979 | 0.8528031 | 0.87790966 | 0.92361087 | 0.9263843 | 0.9267666 | 0.9331527 | 0.9211604 | 0.93254805 | 0.9293966 | 0.9384743 | 0.94264615 | 0.95481694 | 0.925292 | 0.92770493 | 0.9228808 | 0.94696915 | 0.95198935 | 0.9503826 | 0.94648916 | 0.9534141 | 0.92455167 | 0.95611095 | 0.9542403 | 0.94148815 | 0.9469306 | 0.9420104 | 0.9563278 | 0.9498618 | 0.9207492 | 0.90948343 | 0.9452934 | 0.925645 | 0.9316037 | 0.93772334 | 0.94243985 | 0.9443485 | 0.9427036 | 0.95033395 | 0.8643495 | 0.9175434 | 0.91594344 | 0.93442565 | 0.9318248 |
+| 7 | 0.86397296 | 0.86746615 | 0.88374984 | 0.8767478 | 0.8800268 | 0.8612379 | 0.86078864 | 0.8503564 | 0.8532217 | 0.8569271 | 0.77435577 | 0.8022825 | 0.85560477 | 0.84525603 | 0.8560278 | 0.8616382 | 0.8405423 | 0.8638078 | 0.8611984 | 0.86927205 | 0.86064005 | 0.87236387 | 0.8129018 | 0.8445736 | 0.83713543 | 0.8635236 | 0.88073844 | 0.88153136 | 0.8741933 | 0.8876031 | 0.8349956 | 0.8973886 | 0.88783914 | 0.8679245 | 0.85794497 | 0.8613699 | 0.89624107 | 0.850076 | 0.8459414 | 0.7855401 | 0.8736121 | 0.8407768 | 0.8603221 | 0.8601667 | 0.86669654 | 0.86505556 | 0.8640528 | 0.8815363 | 0.7505361 | 0.8320877 | 0.82098305 | 0.85576594 | 0.82720774 |
+| 8 | 0.74600905 | 0.7238932 | 0.7774273 | 0.7792994 | 0.77127254 | 0.74941194 | 0.7751236 | 0.70033807 | 0.7066802 | 0.7126911 | 0.6447074 | 0.675048 | 0.730209 | 0.7073987 | 0.71250427 | 0.6978596 | 0.6819447 | 0.7322815 | 0.7178582 | 0.7223314 | 0.7292094 | 0.7310871 | 0.6801197 | 0.73729926 | 0.70769775 | 0.7742132 | 0.74761355 | 0.77408016 | 0.72798043 | 0.78077316 | 0.73620236 | 0.7321458 | 0.74658024 | 0.7271059 | 0.7168058 | 0.7074397 | 0.7709116 | 0.7320959 | 0.7459578 | 0.65664136 | 0.7347919 | 0.6684944 | 0.7229661 | 0.725994 | 0.73587835 | 0.71881735 | 0.74708545 | 0.751377 | 0.63139814 | 0.6988515 | 0.703585 | 0.7633378 | 0.729386 |
+| 9 | 0.74709934 | 0.7418573 | 0.8106197 | 0.7279986 | 0.75908184 | 0.709865 | 0.7806756 | 0.72347385 | 0.7304086 | 0.7335598 | 0.7067414 | 0.70608795 | 0.71420336 | 0.7438307 | 0.7307808 | 0.7398007 | 0.7317089 | 0.73930156 | 0.7328101 | 0.74611413 | 0.75448495 | 0.7838267 | 0.744593 | 0.7389941 | 0.7466906 | 0.75573 | 0.79689443 | 0.73152053 | 0.78475714 | 0.73449975 | 0.7595314 | 0.7348433 | 0.7623285 | 0.7653218 | 0.76102483 | 0.7553394 | 0.7725123 | 0.77740395 | 0.7170223 | 0.73376197 | 0.7515925 | 0.75378954 | 0.7725164 | 0.7617408 | 0.7481345 | 0.79279804 | 0.8090898 | 0.75854266 | 0.7479905 | 0.7958192 | 0.74646676 | 0.75011843 | 0.7324474 |
+| 10 | 0.7325169 | 0.7080504 | 0.78723705 | 0.6927866 | 0.724087 | 0.6823088 | 0.7636376 | 0.6804254 | 0.6891089 | 0.70683295 | 0.6857985 | 0.70097464 | 0.68910104 | 0.7083628 | 0.6907978 | 0.7107412 | 0.7060549 | 0.70051146 | 0.711305 | 0.7176836 | 0.7421918 | 0.7534275 | 0.69515276 | 0.7134668 | 0.7321815 | 0.72020954 | 0.7546852 | 0.7156718 | 0.7724274 | 0.7142967 | 0.7385094 | 0.71836025 | 0.7495484 | 0.73850644 | 0.72979474 | 0.73349315 | 0.76750165 | 0.7552899 | 0.7004414 | 0.6698346 | 0.7029677 | 0.7272819 | 0.7639408 | 0.74366987 | 0.72868013 | 0.75230205 | 0.78755987 | 0.7385495 | 0.7169949 | 0.7675293 | 0.69565934 | 0.74751043 | 0.62931293 |
+| 11 | 0.91407156 | 0.91713667 | 0.9357424 | 0.92579997 | 0.9258052 | 0.9212577 | 0.90470296 | 0.92696273 | 0.9263951 | 0.9297387 | 0.8626903 | 0.8779972 | 0.9305943 | 0.9281372 | 0.9290339 | 0.9294899 | 0.9236824 | 0.9344307 | 0.92099607 | 0.9299323 | 0.90234864 | 0.9279354 | 0.91649914 | 0.8953023 | 0.89273006 | 0.9175817 | 0.92772734 | 0.915983 | 0.9243611 | 0.9166576 | 0.89455557 | 0.94264156 | 0.94332045 | 0.9375571 | 0.9367256 | 0.9062926 | 0.9281821 | 0.9438356 | 0.89163953 | 0.8972319 | 0.93262804 | 0.9177275 | 0.8921747 | 0.89624226 | 0.897985 | 0.92451537 | 0.92157686 | 0.9414336 | 0.8664072 | 0.89876115 | 0.88473684 | 0.8866402 | 0.91779196 |
+| 12 | 0.82760143 | 0.83204937 | 0.8628601 | 0.85160285 | 0.8464257 | 0.8278438 | 0.80785626 | 0.84114134 | 0.8377935 | 0.85546494 | 0.7551175 | 0.79684144 | 0.84988487 | 0.84654456 | 0.8503391 | 0.8466544 | 0.8501183 | 0.8578949 | 0.82693005 | 0.8406556 | 0.8149306 | 0.8062314 | 0.803034 | 0.81452596 | 0.79407865 | 0.83320224 | 0.8511246 | 0.83432657 | 0.8460727 | 0.83332765 | 0.7987151 | 0.86772156 | 0.8646943 | 0.8662308 | 0.8568735 | 0.83144313 | 0.86123 | 0.8575916 | 0.80087644 | 0.7647201 | 0.8436778 | 0.8258563 | 0.8057254 | 0.7975041 | 0.7947777 | 0.83943 | 0.81594944 | 0.86224926 | 0.7273362 | 0.7880707 | 0.7760471 | 0.80509645 | 0.8172555 |
+| 13 | 0.83343667 | 0.84021556 | 0.8740217 | 0.85634327 | 0.85351974 | 0.83678436 | 0.81808585 | 0.84820193 | 0.8443076 | 0.85778904 | 0.7790885 | 0.81153905 | 0.85909426 | 0.8536908 | 0.8534508 | 0.85632706 | 0.8535069 | 0.85966986 | 0.834246 | 0.8465274 | 0.8195283 | 0.8235539 | 0.818864 | 0.81656426 | 0.80857974 | 0.84475964 | 0.8580844 | 0.8466347 | 0.8570935 | 0.84520996 | 0.80956924 | 0.8723469 | 0.8734846 | 0.87273407 | 0.85818243 | 0.8417667 | 0.8688307 | 0.86123484 | 0.81050795 | 0.78973687 | 0.8487048 | 0.83948994 | 0.81372976 | 0.8112408 | 0.8109148 | 0.8496871 | 0.82846785 | 0.8692179 | 0.74443144 | 0.80300504 | 0.7866528 | 0.8022906 | 0.81492186 |
+| 14 | 0.9073515 | 0.9103961 | 0.92607516 | 0.92117244 | 0.92160785 | 0.9155405 | 0.8985611 | 0.92246485 | 0.9224347 | 0.92599773 | 0.85449755 | 0.8697812 | 0.926483 | 0.924438 | 0.925282 | 0.9265674 | 0.9198723 | 0.9294472 | 0.9146288 | 0.92379105 | 0.8964437 | 0.92415774 | 0.9052393 | 0.89159214 | 0.8880688 | 0.9130802 | 0.91986674 | 0.9116934 | 0.9164133 | 0.9119917 | 0.88878953 | 0.9365697 | 0.93796223 | 0.9281284 | 0.9308816 | 0.9030093 | 0.920266 | 0.93733597 | 0.8863055 | 0.88585204 | 0.92646617 | 0.90966356 | 0.88793886 | 0.8884543 | 0.89060724 | 0.91642106 | 0.9109786 | 0.93313277 | 0.85545814 | 0.8938258 | 0.8803527 | 0.88123685 | 0.90915823 |
+| 15 | 0.90923786 | 0.91065466 | 0.9265529 | 0.9207506 | 0.9204068 | 0.9182707 | 0.8988161 | 0.9234947 | 0.92260045 | 0.9265722 | 0.85485303 | 0.8721196 | 0.9287211 | 0.9261864 | 0.92614716 | 0.9278886 | 0.92017955 | 0.9299387 | 0.9168146 | 0.9256257 | 0.89779395 | 0.924808 | 0.9090807 | 0.89117205 | 0.8875772 | 0.91303426 | 0.9187926 | 0.912028 | 0.91752416 | 0.91270435 | 0.8879217 | 0.9372218 | 0.9386894 | 0.92829084 | 0.9292076 | 0.9023737 | 0.91949254 | 0.9395277 | 0.8863737 | 0.88572294 | 0.92507803 | 0.90831614 | 0.8898918 | 0.8887812 | 0.8905368 | 0.91579455 | 0.91033334 | 0.9329545 | 0.8580456 | 0.8908783 | 0.8798951 | 0.8810487 | 0.909427 |
+| 16 | 0.8602273 | 0.8583001 | 0.8797926 | 0.86827964 | 0.8752721 | 0.86599255 | 0.84968436 | 0.8725716 | 0.8786241 | 0.87942964 | 0.76478237 | 0.8008796 | 0.8782212 | 0.8760465 | 0.87741363 | 0.8765494 | 0.8766171 | 0.88206637 | 0.853994 | 0.87459373 | 0.8399364 | 0.86656 | 0.84651196 | 0.80821973 | 0.80971134 | 0.858527 | 0.8739873 | 0.85354817 | 0.86425275 | 0.86125135 | 0.8247094 | 0.8734511 | 0.8829136 | 0.8647051 | 0.8752306 | 0.8534626 | 0.87700593 | 0.88156354 | 0.84580934 | 0.79319394 | 0.87750614 | 0.84769714 | 0.8395311 | 0.8277601 | 0.836119 | 0.87667716 | 0.8671384 | 0.88546866 | 0.784528 | 0.829875 | 0.8024996 | 0.8244095 | 0.84125817 |
+| 17 | 0.89859694 | 0.89795923 | 0.916214 | 0.9094664 | 0.91197854 | 0.90983903 | 0.891013 | 0.91122496 | 0.9132098 | 0.91506803 | 0.84498703 | 0.85650903 | 0.9179428 | 0.9172953 | 0.9149941 | 0.9181547 | 0.9091576 | 0.91755295 | 0.9034201 | 0.9125822 | 0.88698924 | 0.91843903 | 0.8932158 | 0.88664496 | 0.8819984 | 0.9058201 | 0.9062309 | 0.90327185 | 0.90001327 | 0.90421325 | 0.88334846 | 0.9248203 | 0.92612106 | 0.9145051 | 0.92292196 | 0.89466774 | 0.90725935 | 0.92443764 | 0.8798872 | 0.87042445 | 0.9170413 | 0.9016773 | 0.8813025 | 0.87277937 | 0.87573355 | 0.9031371 | 0.8980996 | 0.9164313 | 0.84511757 | 0.8821065 | 0.876787 | 0.86872137 | 0.89067566 |
+| 18 | 0.90128195 | 0.89974976 | 0.9163455 | 0.91082513 | 0.9127563 | 0.91407144 | 0.89269793 | 0.91504127 | 0.9162118 | 0.91808254 | 0.8474339 | 0.8613331 | 0.9217826 | 0.92023593 | 0.91771823 | 0.9215518 | 0.9122571 | 0.91954404 | 0.9087303 | 0.9170617 | 0.89009917 | 0.91764194 | 0.900092 | 0.8857821 | 0.882109 | 0.90713674 | 0.9053521 | 0.9043385 | 0.90478194 | 0.90636647 | 0.8830474 | 0.9269101 | 0.9268697 | 0.91549903 | 0.92217904 | 0.89549094 | 0.9060098 | 0.93030584 | 0.87867785 | 0.8724238 | 0.9143793 | 0.9006112 | 0.8822645 | 0.8755104 | 0.8772758 | 0.90311784 | 0.8970152 | 0.9184691 | 0.85019815 | 0.87986195 | 0.8777112 | 0.8713827 | 0.89186126 |
+| 19 | 0.5148861 | 0.4838584 | 0.5241456 | 0.51845473 | 0.4904287 | 0.49661547 | 0.52218145 | 0.4668033 | 0.47564015 | 0.49286398 | 0.50819784 | 0.5628712 | 0.50135964 | 0.48381543 | 0.46464968 | 0.45198423 | 0.48767385 | 0.48941964 | 0.46439314 | 0.47637957 | 0.5003433 | 0.40299258 | 0.47041106 | 0.5115839 | 0.5068773 | 0.46910176 | 0.46826062 | 0.4578019 | 0.52419436 | 0.45541826 | 0.5266739 | 0.47750005 | 0.4974044 | 0.49718517 | 0.5065816 | 0.52356845 | 0.5070601 | 0.47708526 | 0.5373729 | 0.5202588 | 0.5242063 | 0.57200444 | 0.526701 | 0.49444056 | 0.4886077 | 0.5066331 | 0.5319418 | 0.51575613 | 0.4835156 | 0.55610806 | 0.4582719 | 0.48316178 | 0.44541487 |
+| 20 | 0.83246815 | 0.8220504 | 0.85688514 | 0.84707963 | 0.85047656 | 0.82843083 | 0.82732993 | 0.81118757 | 0.8202332 | 0.82369053 | 0.76004976 | 0.80066645 | 0.8229685 | 0.8129635 | 0.8122606 | 0.8088685 | 0.81200254 | 0.82062566 | 0.8121486 | 0.8189365 | 0.82527226 | 0.80756533 | 0.8298448 | 0.83003634 | 0.8169193 | 0.8328595 | 0.8335435 | 0.84027576 | 0.8517395 | 0.8373976 | 0.81677246 | 0.81726485 | 0.83186454 | 0.8384017 | 0.82542115 | 0.834849 | 0.8543849 | 0.827336 | 0.8107222 | 0.8065051 | 0.8251623 | 0.841436 | 0.845122 | 0.8081605 | 0.82364637 | 0.8481552 | 0.84596634 | 0.8436537 | 0.7575201 | 0.83395845 | 0.8003419 | 0.83060914 | 0.81943476 |
+| 21 | 0.93237484 | 0.93161935 | 0.94380283 | 0.9413832 | 0.93824065 | 0.9315014 | 0.94044226 | 0.9172242 | 0.91929924 | 0.9189434 | 0.87254846 | 0.88190764 | 0.90589523 | 0.90886575 | 0.9173559 | 0.9228865 | 0.9112426 | 0.922983 | 0.927125 | 0.9273774 | 0.9306048 | 0.93329716 | 0.93031776 | 0.9283554 | 0.9276662 | 0.9302908 | 0.9435089 | 0.937774 | 0.94533396 | 0.93875456 | 0.9251503 | 0.9335715 | 0.9375416 | 0.94229364 | 0.9340962 | 0.9353548 | 0.94764835 | 0.93291634 | 0.9243271 | 0.9136669 | 0.94678676 | 0.9223601 | 0.9407562 | 0.931266 | 0.9334772 | 0.9404181 | 0.9403165 | 0.94730675 | 0.8844078 | 0.9354614 | 0.91487855 | 0.9343748 | 0.927917 |
+| 22 | 0.928537 | 0.9245998 | 0.9322461 | 0.9370645 | 0.9320175 | 0.9285679 | 0.94019425 | 0.901313 | 0.8954921 | 0.8992651 | 0.8702776 | 0.88328934 | 0.88265455 | 0.8904606 | 0.9014336 | 0.9048706 | 0.89053124 | 0.90569985 | 0.90964776 | 0.9148289 | 0.92297727 | 0.9302785 | 0.931296 | 0.9286455 | 0.9294113 | 0.9308885 | 0.94530755 | 0.93284166 | 0.93541497 | 0.9335186 | 0.91981345 | 0.924277 | 0.92908776 | 0.93391705 | 0.9265779 | 0.9276354 | 0.9493076 | 0.92359704 | 0.9220603 | 0.91484624 | 0.93902606 | 0.91986054 | 0.93058664 | 0.92746526 | 0.9281828 | 0.94167244 | 0.93956643 | 0.9404 | 0.88879144 | 0.93194485 | 0.9219629 | 0.93191546 | 0.924389 |
+| 23 | 0.9283637 | 0.92405206 | 0.9320523 | 0.9371664 | 0.9317872 | 0.9290888 | 0.9400579 | 0.90054196 | 0.8947786 | 0.8988401 | 0.8704626 | 0.8830897 | 0.88172865 | 0.89016134 | 0.9010991 | 0.90402997 | 0.8902402 | 0.9051124 | 0.90958196 | 0.91440564 | 0.92319536 | 0.93074065 | 0.9319048 | 0.92853296 | 0.92977536 | 0.9308527 | 0.94520205 | 0.93295443 | 0.9347412 | 0.93338776 | 0.91996825 | 0.9237623 | 0.928755 | 0.93365943 | 0.9257433 | 0.9271186 | 0.9487368 | 0.92406005 | 0.9232441 | 0.91486055 | 0.9383974 | 0.9197427 | 0.93080837 | 0.9274827 | 0.92795163 | 0.9411294 | 0.93934214 | 0.93972206 | 0.88889253 | 0.9320772 | 0.9223173 | 0.9316037 | 0.9240077 |
+| 24 | 0.9229984 | 0.9248651 | 0.9288824 | 0.93193805 | 0.92742187 | 0.92679006 | 0.93519706 | 0.8991693 | 0.8993284 | 0.9018758 | 0.8660077 | 0.8770809 | 0.8844 | 0.8912414 | 0.9014284 | 0.9037474 | 0.8908683 | 0.90938884 | 0.9121523 | 0.91397554 | 0.9193457 | 0.92428046 | 0.9218782 | 0.92255306 | 0.927071 | 0.9269155 | 0.94179046 | 0.93130624 | 0.934523 | 0.93172264 | 0.91473186 | 0.9251665 | 0.92952883 | 0.9331131 | 0.9258736 | 0.92415965 | 0.9457911 | 0.9279497 | 0.9217973 | 0.90905046 | 0.93912286 | 0.91771966 | 0.9265585 | 0.9234087 | 0.9245659 | 0.9403642 | 0.93894976 | 0.93924934 | 0.8757825 | 0.929661 | 0.9136151 | 0.92598534 | 0.9250633 |
+| 25 | 0.926321 | 0.92526835 | 0.9279283 | 0.9353447 | 0.9316429 | 0.928747 | 0.94068575 | 0.9022722 | 0.900321 | 0.9038242 | 0.8701943 | 0.87931806 | 0.8850271 | 0.8891328 | 0.9046224 | 0.9064411 | 0.8924324 | 0.9097969 | 0.9139665 | 0.91717976 | 0.92256916 | 0.93007296 | 0.9246637 | 0.92655504 | 0.9299843 | 0.93003243 | 0.94267416 | 0.93301994 | 0.93625754 | 0.93347263 | 0.9201044 | 0.9240898 | 0.92949665 | 0.93412846 | 0.9263752 | 0.9264287 | 0.9463023 | 0.92760956 | 0.9229372 | 0.9135138 | 0.9407762 | 0.919462 | 0.9273659 | 0.9249004 | 0.9262619 | 0.9418845 | 0.94115144 | 0.93945295 | 0.8808873 | 0.93068266 | 0.9190588 | 0.92791873 | 0.9263468 |
+| 26 | 0.92093784 | 0.9130548 | 0.9119048 | 0.92865163 | 0.9220151 | 0.91959846 | 0.9333476 | 0.8967762 | 0.8879358 | 0.8993397 | 0.8618177 | 0.874276 | 0.87191504 | 0.877127 | 0.8988155 | 0.89607847 | 0.8869227 | 0.90598613 | 0.91079676 | 0.91087186 | 0.9166958 | 0.9244316 | 0.9210121 | 0.9181078 | 0.9221287 | 0.9259672 | 0.9396801 | 0.9282443 | 0.92481375 | 0.92617273 | 0.90916187 | 0.91723526 | 0.92062485 | 0.92087764 | 0.91126204 | 0.91742027 | 0.9397605 | 0.9114583 | 0.91763246 | 0.8980342 | 0.93011653 | 0.90392935 | 0.91698706 | 0.9178637 | 0.9204372 | 0.93857783 | 0.9350878 | 0.9335062 | 0.880074 | 0.91502225 | 0.913771 | 0.92251456 | 0.91272783 |
+| 27 | 0.9360441 | 0.93754387 | 0.9378196 | 0.93059856 | 0.93400544 | 0.92073405 | 0.93008024 | 0.90754044 | 0.90150464 | 0.9104866 | 0.85097444 | 0.8648588 | 0.88763 | 0.88124293 | 0.90646374 | 0.89415234 | 0.89694005 | 0.9190024 | 0.9111303 | 0.9124007 | 0.9342758 | 0.9157637 | 0.91229045 | 0.91819745 | 0.91974485 | 0.9281826 | 0.9429575 | 0.9354464 | 0.9459235 | 0.9353344 | 0.9228759 | 0.929505 | 0.9320841 | 0.94114816 | 0.93589705 | 0.93418884 | 0.94922334 | 0.9220665 | 0.9259375 | 0.91102326 | 0.9435218 | 0.9275807 | 0.9395231 | 0.9378897 | 0.94035035 | 0.94557846 | 0.9434717 | 0.95079076 | 0.86401594 | 0.943103 | 0.90950954 | 0.93546736 | 0.93597066 |
+| 28 | 0.775777 | 0.78724563 | 0.8414637 | 0.7778126 | 0.79933417 | 0.7817564 | 0.8016636 | 0.8197063 | 0.8342703 | 0.8333728 | 0.7181636 | 0.73910725 | 0.8372518 | 0.8266317 | 0.83413374 | 0.82771146 | 0.82529974 | 0.832466 | 0.8104701 | 0.82174903 | 0.7843789 | 0.770418 | 0.762564 | 0.76538426 | 0.7512001 | 0.78398 | 0.8196338 | 0.8024616 | 0.82721615 | 0.8127287 | 0.7873874 | 0.8274334 | 0.8421814 | 0.8438142 | 0.83970296 | 0.76954013 | 0.81748027 | 0.8042429 | 0.7560166 | 0.6930539 | 0.8279761 | 0.7880165 | 0.7917965 | 0.8102954 | 0.8210645 | 0.7893211 | 0.7902684 | 0.8243229 | 0.72726405 | 0.7365767 | 0.7345691 | 0.7811078 | 0.7928408 |
+| 29 | 0.7755911 | 0.78365535 | 0.7955662 | 0.7726702 | 0.78081405 | 0.7447791 | 0.76837456 | 0.76806813 | 0.7593347 | 0.78946817 | 0.71571994 | 0.7423885 | 0.75488675 | 0.76050484 | 0.7767417 | 0.75515807 | 0.7560926 | 0.79323375 | 0.7844582 | 0.7785039 | 0.76967335 | 0.7723901 | 0.6986845 | 0.73087585 | 0.7438265 | 0.77657557 | 0.81567764 | 0.7922081 | 0.8082425 | 0.81479293 | 0.78027135 | 0.77660686 | 0.792617 | 0.7959313 | 0.7931905 | 0.77055144 | 0.8104944 | 0.7810618 | 0.78024703 | 0.6806043 | 0.77464974 | 0.75711787 | 0.7836178 | 0.7490552 | 0.75727844 | 0.8089902 | 0.809889 | 0.7984759 | 0.70388234 | 0.7652801 | 0.73691046 | 0.7531263 | 0.7549575 |
+| 30 | 0.86907303 | 0.87709534 | 0.8892682 | 0.87890136 | 0.8797976 | 0.8652977 | 0.86624134 | 0.8751129 | 0.8729046 | 0.8730911 | 0.7953715 | 0.8016896 | 0.86001766 | 0.8556253 | 0.87606984 | 0.8513564 | 0.8616775 | 0.87776357 | 0.8659916 | 0.8667097 | 0.85733044 | 0.8636133 | 0.86460906 | 0.84825706 | 0.86301917 | 0.87906754 | 0.9028522 | 0.8837965 | 0.90144175 | 0.890666 | 0.8819518 | 0.8645133 | 0.8685664 | 0.884997 | 0.86303884 | 0.8631667 | 0.8997812 | 0.8736907 | 0.8517563 | 0.82723045 | 0.8892733 | 0.848231 | 0.88322103 | 0.8802334 | 0.8852254 | 0.89971745 | 0.89269936 | 0.8960395 | 0.83525074 | 0.8867612 | 0.86124974 | 0.8613554 | 0.87867373 |
+| 31 | 0.97092545 | 0.9738407 | 0.9726168 | 0.9705167 | 0.9719955 | 0.96529067 | 0.967004 | 0.97283256 | 0.96943796 | 0.9717625 | 0.9308685 | 0.937183 | 0.9692934 | 0.9647868 | 0.973098 | 0.97087 | 0.9663455 | 0.9743085 | 0.9705864 | 0.97507733 | 0.9705836 | 0.9678353 | 0.95958966 | 0.969169 | 0.9653621 | 0.96882117 | 0.97737944 | 0.97429246 | 0.9713813 | 0.97563934 | 0.96830285 | 0.97678024 | 0.9754341 | 0.97956944 | 0.98149365 | 0.96961844 | 0.97641927 | 0.97243583 | 0.9672562 | 0.9622671 | 0.98063356 | 0.96369827 | 0.9725809 | 0.9701904 | 0.9697736 | 0.9755146 | 0.9726264 | 0.9798109 | 0.9435636 | 0.96781576 | 0.9630855 | 0.9674386 | 0.97016114 |
+| 32 | 0.9809187 | 0.98109424 | 0.98273295 | 0.9826487 | 0.98353195 | 0.978567 | 0.9761998 | 0.97807217 | 0.97395384 | 0.97686213 | 0.9439065 | 0.9506919 | 0.9697952 | 0.96719944 | 0.9782325 | 0.9739771 | 0.97268903 | 0.9795052 | 0.9789502 | 0.97876567 | 0.9817687 | 0.98147506 | 0.97299594 | 0.9791468 | 0.9767038 | 0.98164785 | 0.9834835 | 0.98407555 | 0.98510504 | 0.9855609 | 0.9778174 | 0.98395765 | 0.98436326 | 0.9828917 | 0.9856383 | 0.9801574 | 0.9837014 | 0.9831983 | 0.9754168 | 0.9763497 | 0.9868142 | 0.97566974 | 0.97952974 | 0.98152065 | 0.98201495 | 0.98002803 | 0.98117673 | 0.9851729 | 0.95371073 | 0.9772339 | 0.9751421 | 0.9780224 | 0.9816267 |
+| 33 | 0.9817122 | 0.98215216 | 0.98367465 | 0.9831109 | 0.9838104 | 0.97890437 | 0.9771002 | 0.9806876 | 0.9764554 | 0.9787552 | 0.9427277 | 0.9489355 | 0.9730997 | 0.97066057 | 0.98043 | 0.97687304 | 0.9751271 | 0.9816497 | 0.98083484 | 0.9812145 | 0.9823661 | 0.9819382 | 0.9727868 | 0.9791126 | 0.97674626 | 0.9827916 | 0.98450166 | 0.9845502 | 0.98600876 | 0.9856249 | 0.9768685 | 0.9847182 | 0.9854747 | 0.98561704 | 0.98682106 | 0.98074085 | 0.9854784 | 0.98394763 | 0.9750999 | 0.97697955 | 0.98784864 | 0.9763883 | 0.9809701 | 0.9825989 | 0.9831155 | 0.9813431 | 0.9823836 | 0.9866927 | 0.9544281 | 0.97746074 | 0.9751999 | 0.97978556 | 0.9834778 |
+| 34 | 0.90410125 | 0.90680903 | 0.92128646 | 0.9143958 | 0.9158481 | 0.8918082 | 0.8997816 | 0.92019033 | 0.9175846 | 0.9191364 | 0.8220949 | 0.8395492 | 0.9100908 | 0.9162499 | 0.91915 | 0.9249789 | 0.91704196 | 0.9196264 | 0.9270242 | 0.9284948 | 0.90855324 | 0.9115389 | 0.85471135 | 0.8958686 | 0.8965312 | 0.91096485 | 0.92774934 | 0.90534735 | 0.9221341 | 0.9090401 | 0.8941072 | 0.9274341 | 0.92812806 | 0.92374074 | 0.9201213 | 0.8910345 | 0.9225856 | 0.9322237 | 0.9016053 | 0.8857511 | 0.92636603 | 0.8806467 | 0.8879943 | 0.9083681 | 0.91117775 | 0.9204297 | 0.9237857 | 0.92766094 | 0.8438548 | 0.8981447 | 0.88393563 | 0.9071585 | 0.89974517 |
+| 35 | 0.9304651 | 0.9360754 | 0.9373642 | 0.9378651 | 0.9399136 | 0.91301155 | 0.9241265 | 0.9416006 | 0.9379646 | 0.9405562 | 0.84415454 | 0.86180687 | 0.9340555 | 0.93504936 | 0.93873155 | 0.94054794 | 0.9390136 | 0.9413017 | 0.9458993 | 0.9490113 | 0.93361175 | 0.9318949 | 0.887578 | 0.9217321 | 0.92073584 | 0.93365145 | 0.9469075 | 0.9325186 | 0.943766 | 0.9310853 | 0.9221939 | 0.94243354 | 0.9405548 | 0.9440449 | 0.9430636 | 0.9187519 | 0.9380477 | 0.9493167 | 0.9269924 | 0.9058603 | 0.9413884 | 0.90062684 | 0.9228462 | 0.9262284 | 0.9300885 | 0.9420837 | 0.94374263 | 0.9459003 | 0.8462122 | 0.92697465 | 0.91107005 | 0.92900574 | 0.9222956 |
+| 36 | 0.37276235 | 0.38472813 | 0.44760126 | 0.372362 | 0.38463253 | 0.36715278 | 0.41816115 | 0.3950319 | 0.42877498 | 0.42786813 | 0.45232335 | 0.4676345 | 0.455053 | 0.4421401 | 0.40422136 | 0.41810757 | 0.42532867 | 0.42556134 | 0.41921002 | 0.41067284 | 0.37895823 | 0.35006508 | 0.3288232 | 0.40037045 | 0.40899235 | 0.36357552 | 0.38310692 | 0.36846977 | 0.43599766 | 0.36855298 | 0.40057832 | 0.37671006 | 0.4072884 | 0.38091877 | 0.4095339 | 0.40090442 | 0.38924876 | 0.45389405 | 0.40337506 | 0.38338327 | 0.42574772 | 0.44194323 | 0.40642586 | 0.43526858 | 0.44279003 | 0.3890094 | 0.4387764 | 0.40467644 | 0.40713868 | 0.37914062 | 0.36626363 | 0.41394567 | 0.4068156 |
+| 37 | 0.40191346 | 0.40634757 | 0.44615278 | 0.39705473 | 0.4092539 | 0.4044037 | 0.43552646 | 0.42489815 | 0.45685062 | 0.45217052 | 0.41091973 | 0.42020637 | 0.46475536 | 0.46956053 | 0.43186265 | 0.4662307 | 0.4618371 | 0.45404863 | 0.41826898 | 0.43780708 | 0.40042695 | 0.3546711 | 0.3965548 | 0.40292516 | 0.40608087 | 0.41005453 | 0.40883064 | 0.39074016 | 0.40505153 | 0.38369936 | 0.4026986 | 0.42218208 | 0.47533503 | 0.4188973 | 0.45330304 | 0.4102736 | 0.4197692 | 0.46742886 | 0.3854998 | 0.3606917 | 0.46222892 | 0.42464933 | 0.42086166 | 0.42368037 | 0.422007 | 0.42772847 | 0.44507942 | 0.43524036 | 0.43923074 | 0.39076346 | 0.3789634 | 0.39115542 | 0.45674348 |
+| 38 | 0.4691376 | 0.4679319 | 0.50362694 | 0.47989312 | 0.49773568 | 0.461327 | 0.50234014 | 0.46101514 | 0.46848312 | 0.48544127 | 0.48462301 | 0.48663735 | 0.47539192 | 0.4801535 | 0.46579772 | 0.4721485 | 0.47672677 | 0.493955 | 0.49828824 | 0.476755 | 0.4638551 | 0.40302858 | 0.39435464 | 0.48433357 | 0.4921872 | 0.47265634 | 0.48374778 | 0.45667648 | 0.50758064 | 0.46194023 | 0.48125058 | 0.4688631 | 0.49279913 | 0.475803 | 0.5026374 | 0.4970335 | 0.50455296 | 0.49088073 | 0.4750162 | 0.45198908 | 0.532062 | 0.49467832 | 0.48948687 | 0.5120142 | 0.5187799 | 0.4955965 | 0.5278772 | 0.51299065 | 0.46633315 | 0.4638737 | 0.45721117 | 0.47595787 | 0.5179861 |
+| 39 | 0.45469823 | 0.43628588 | 0.47376496 | 0.4331115 | 0.45563206 | 0.4266189 | 0.48917022 | 0.4123408 | 0.4388849 | 0.430713 | 0.477571 | 0.5136075 | 0.46588764 | 0.47805786 | 0.41425338 | 0.4249959 | 0.43607974 | 0.4300545 | 0.4285265 | 0.41880354 | 0.45265284 | 0.42361134 | 0.4080407 | 0.44041795 | 0.45451146 | 0.4655818 | 0.48498982 | 0.45182982 | 0.50939286 | 0.45392948 | 0.44727486 | 0.4284223 | 0.4554248 | 0.43139118 | 0.49287686 | 0.4588147 | 0.48043832 | 0.45319575 | 0.4829255 | 0.45853528 | 0.5024455 | 0.48712936 | 0.47057968 | 0.49425825 | 0.50995857 | 0.4897833 | 0.49672437 | 0.47205067 | 0.4887423 | 0.48481122 | 0.45244223 | 0.46911916 | 0.4672882 |
+
+### Detailed arguments:
 ```
 usage: iDARTS [-h] [--version]
-              {get_resources,build_feature,predict,parse_vcf}
+              {get_resources,parse_vcf,build_feature,predict} ...
+
+iDARTS - individualized Deep-learning Analysis of RNA Transcript Splicing
+
 positional arguments:
+  {get_resources,parse_vcf,build_feature,predict}
+    get_resources       iDARTS get_resources: download hg19 fasta and
+                        phastCons scores
+
+    parse_vcf           iDARTS parse_vcf: get the predicted PSI values of
+                        reference and alternative alleles as well as the
+                        predicted deltaPSI in GTEx tissues or user-provided
+                        RBP expression levels from the pre-compiled
+                        alternative splicing events or user-provided events
+
+    build_feature       iDARTS build_feature: build cis-sequence features for
+                        alternative splicing events
+
+    predict             iDARTS predict: predict PSI values given alternative
+                        splicing events with annotated cis-sequence features
+                        and RBP expression levels from the GTEx or user-
+                        provided RBP expression levels
 
 get_resources
-    usage:iDARTS get_resources [-h] [-o OUT_DIR]
+  usage: iDARTS get_resources [-h] [-o OUT_DIR] [-f {True,False}]
 
-    optional arguments:
-      -h, --help            show this help message and exit
-      -o OUT_DIR, --out-dir OUT_DIR
-                            Optional, default user home directory: Output folder
-                            for downloaded data
+  optional arguments:
+    -h, --help            show this help message and exit
+    -o OUT_DIR, --out-dir OUT_DIR
+                          Optional, default user home directory: Output folder
+                          for downloaded data
+    -f {True,False}, --force {True,False}
+                          Optional, force redownload of resources
 
 parse_vcf
-  usage: iDARTS parse_vcf [-h] [-t {SE,A5SS,A3SS,RI}] -i INPUT -v VCF_PATH -o
-                          OUTPUT  
+  usage: iDARTS parse_vcf [-h] [-t {SE,A5SS,A3SS}] [-i INPUT] -v VCF_PATH
+                          [-e EXPR] -o OUTFILENAMEPREFIX  
 
   optional arguments:
     -h, --help            show this help message and exit
-    -t {SE,A5SS,A3SS,RI}, --type {SE,A5SS,A3SS,RI}
+    -t {SE,A5SS,A3SS}, --type {SE,A5SS,A3SS}
                           Optional, default SE: specify the alternative splicing
                           event type. SE: skipped exons, A3SS: alternative 3
-                          splice sites, A5SS: alternative 5 splice sites, RI:
-                          retained introns. A5SS, A3SS, and RI are under development.
+                          splice sites, A5SS: alternative 5 splice sites
     -i INPUT, --input INPUT
-                          A list of alternative splicing events; iDARTS parse
-                          SNVs from vcf for alternative splicing events
+                          Optional, a list of alternative splicing events; If
+                          not provided, the alternative splicing events will be
+                          the pre-compiled events from GENCODEv26lift37
     -v VCF_PATH, --vcf_path VCF_PATH
-                          vcf path
-    -o OUTPUT, --out-file-name OUTPUT
-                          parsed vcf output file name
+                          the file location of the VCF
+    -e EXPR, --expression EXPR
+                          Optional, a list of RBP expression levels (TPM values
+                          from Kallisto); header format
+                          'Gene_ID\tExp1,Exp2,Exp3...(different expression
+                          profiles separated by comma). If not provided, the
+                          pre-compiled RBP expression levels from the GTEx will
+                          be used.'
+    -o OUTFILENAMEPREFIX, --outFileNamePrefix OUTFILENAMEPREFIX
+                          output files name prefix (including full or relative
+                          path).
 
 build_feature
-  usage: iDARTS build_feature [-h] [-t {SE,A5SS,A3SS,RI}] -i INPUT
-                              [-m {True,False}] -o OUTPUT 
+  usage: iDARTS build_feature [-h] [-t {SE,A5SS,A3SS}] -i INPUT
+                              [-m {True,False}] -o OUTPUT
 
   optional arguments:
     -h, --help            show this help message and exit
-    -t {SE,A5SS,A3SS,RI}, --type {SE,A5SS,A3SS,RI}
+    -t {SE,A5SS,A3SS}, --type {SE,A5SS,A3SS}
                           Optional, default SE: specify the alternative splicing
-                          event type. SE: skipped exons, A3SS: alternative 3
-                          splice sites, A5SS: alternative 5 splice sites, RI:
-                          retained introns
+                          event type. SE: skipped exons, A3SS: alternative
+                          3-prime splice sites, A5SS: alternative 5-prime splice
+                          sites
     -i INPUT, --input INPUT
-                          A list of alternative splicing events; iDARTS build
-                          feature
+                          A list of alternative splicing events
     -m {True,False}, --mutate {True,False}
-                          Annotate the sequence features with SNV (300nt within
-                          exon-intron boundary or on exons)
+                          Whether annotate the sequence features with SNV (300nt
+                          in the vicinity of skipped exons);
     -o OUTPUT, --out-file-name OUTPUT
-                          feature annotation output file name   
+                          Annotation output file name
 
 predict
-  usage: iDARTS predict [-h] [-t {SE,A5SS,A3SS,RI}] -i INPUT [-e EXPR] -o OUTPUT  
+  usage: iDARTS predict [-h] [-t {SE,A5SS,A3SS}] -i INPUT [-e EXPR] -o OUTPUT
 
   optional arguments:
     -h, --help            show this help message and exit
-    -t {SE,A5SS,A3SS,RI}, --type {SE,A5SS,A3SS,RI}
+    -t {SE,A5SS,A3SS}, --type {SE,A5SS,A3SS}
                           Optional, default SE: specify the alternative splicing
                           event type. SE: skipped exons, A3SS: alternative 3
-                          splice sites, A5SS: alternative 5 splice sites, RI:
-                          retained introns
+                          splice sites, A5SS: alternative 5 splice sites
     -i INPUT, --input INPUT
-                          A list of annotated alternative splicing features
+                          A list of alternative splicing events with built cis-
+                          sequence features; the input is the output of the
+                          build_feature step
     -e EXPR, --expression EXPR
-                          Expressing file (TPM value from Kallisto);header
-                          format 'Gene_ID\tExp1,Exp2,Exp3...(different
-                          expression profiles separated by comma)'
+                          Optional, a list of RBP expression levels (TPM values
+                          from Kallisto); header format
+                          'Gene_ID\tExp1,Exp2,Exp3...(different expression
+                          profiles separated by comma). If not provided, the
+                          pre-compiled RBP expression levels from the GTEx will
+                          be used.'
     -o OUTPUT, --out-file-name OUTPUT
-                          iDARTS prediction output file name                          
+                          The predicted PSI values for the alternative splicing
+                          events                    
 ```
 
-### Contact
+## Contact
 [Mailing List](mailto:idarts-user-group@googlegroups.com) / [Group](https://groups.google.com/d/forum/idarts-user-group)
 
 [GitHub Issues](https://github.com/Xinglab/iDARTS/issues)
 
-Zhicheng Pan <zc.pan@ucla.edu>
+Zhicheng Pan <zcpan1016@gmail.com>
 
 Yi Xing <xingyi@chop.edu>
 
-### Copyright and License Information
+## Copyright and License Information
 Copyright (C) 2021 The Children’s Hospital of Philadelphia
 
 Authors: Zhicheng Pan and Yi Xing
