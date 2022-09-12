@@ -100,7 +100,7 @@ def check_resources_md5(outdir):
 def get_resource_download_status():
     if os.path.exists(config.iDARTS_DIRECTORY + 'resource.yaml'):
         DATA_CONFIG = yaml.safe_load(open(config.iDARTS_DIRECTORY + 'resource.yaml', 'r'))
-        if DATA_CONFIG['data_download'] == True:
+        if DATA_CONFIG['data_download'] == True and os.path.exists(DATA_CONFIG['data_dir']):
             logger.info('resources already downloaded: ' + DATA_CONFIG['data_dir'])
             return True
     return False
