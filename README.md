@@ -128,11 +128,11 @@ AS event specific columns:
 iDARTS Prediction columns: (Suppose we have three samples with sample name Sample1, Sample2, and Sample3 specified in user-provided RBP expression levels of sample types. When not provided, the RBP expression levels across 53 GTEx tissues will be used.)
 
 * `Sample1_ref_PSI`: The predicted reference PSI of the target AS event in Sample1
-* `Sample1_ref_PSI`: The predicted reference PSI of the target AS event in Sample2
-* `Sample1_ref_PSI`: The predicted reference PSI of the target AS event in Sample3
+* `Sample2_ref_PSI`: The predicted reference PSI of the target AS event in Sample2
+* `Sample3_ref_PSI`: The predicted reference PSI of the target AS event in Sample3
 * `Sample1_deltaPSI`: The predicted ΔPSI of the target AS event in Sample1
-* `Sample1_deltaPSI`: The predicted ΔPSI of the target AS event in Sample2
-* `Sample1_deltaPSI`: The predicted ΔPSI of the target AS event in Sample3
+* `Sample2_deltaPSI`: The predicted ΔPSI of the target AS event in Sample2
+* `Sample3_deltaPSI`: The predicted ΔPSI of the target AS event in Sample3
 
 ### Example
 -----------------
