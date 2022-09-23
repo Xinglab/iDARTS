@@ -72,7 +72,7 @@ def check_vcf_file(vcf_path):
         return True
     sys.stderr.write("\nCould not retrieve index file for '{}'".format(vcf_path))
     sys.stderr.write("\n- VCF needs to be sorted and index first. \n- Example code: tabix -p vcf example.vcf.gz\n")
-    sys.exit(0)
+    sys.exit(1)
 
 def parse_vcf_SE(args): # parse vcf files for exon skipping events
     if args.input == None:
