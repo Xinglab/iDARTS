@@ -17,29 +17,38 @@
 - [Copyright and License Information](#copyright-and-license-information)
 
 ## Installation
-Installation of the required packages can be easy by using [Anaconda](https://anaconda.org/anaconda).
+Installation of the required packages can be easy by using [Miniconda](https://docs.anaconda.com/free/miniconda/index.html).
 
 Install required packages
 ```bash
-conda create -n idarts python=2.7  # optional
-conda activate idarts              # optional
-conda install -c bioconda viennarna==2.2.10
-conda install tensorflow==1.9.0
-conda install keras==2.2.4
-conda install bedtools
-conda install pysam
-conda install pandas
-conda install regex
-conda install pyyaml
-conda install pyBigWig
+conda create -n idarts python=2.7 --solver=classic 
+conda activate idarts
+conda install tensorflow==1.9.0 -c conda-forge --solver=classic 
+conda install keras==2.2.4 -c conda-forge --solver=classic 
+conda install viennarna==2.2.10 -c bioconda --solver=classic 
+conda install bedtools -c bioconda --solver=classic 
+conda install pysam -c bioconda --solver=classic 
+conda install pandas -c conda-forge --solver=classic 
+conda install regex -c conda-forge --solver=classic 
+conda install pyyaml -c conda-forge --solver=classic 
+conda install pyBigWig -c bioconda --solver=classic 
+conda install cyvcf2 -c bioconda --solver=classic 
+
 pip install scikit-image
-conda install cyvcf2
 pip install psutil
 pip install joblib
 pip install tqdm
 ```
+If the installation takes a long time, we have provided an environment file for installation.
+```bash
+git clone https://github.com/xinglab/iDARTS
+cd iDARTS
+
+conda env create -n idarts -f environment.yml --solver=classic
+```
 Clone the repository and then download resource files
 ```bash
+# if you have already cloned the repository, please skip this step
 # clone the repository
 git clone https://github.com/xinglab/iDARTS
 
@@ -50,7 +59,12 @@ chmod +x ./bin/iDARTS
 ./bin/iDARTS get_resources -o /path/to/directory/
 ```
 ## Usage
-iDARTS allows users to take a **Variant Call Format** (VCF) file containing variants of interests and make predictions on either pre-compiled (annotated) or user-provided AS events, based on iDARTS DNN trained on GTEx data and reference RBP expression levels across 53 GTEx tissues. The software output includes the predicted splicing levels (PSI values) of the reference and variants alleles, as well as the predicted variant effects on splicing (ΔPSI) in GTEx tissue types. iDARTS can also make predictions based on user-provided RBP expression levels for specific sample types of interest. When a VCF file is not provided, iDARTS reports predicted splicing levels (PSI values) for AS events of interest.
+iDARTS allows users to input a **Variant Call Format (VCF)** file containing variants of interest and make predictions on either pre-compiled (annotated) or user-provided alternative splicing (AS) events. These predictions are based on the iDARTS deep neural network (DNN), trained on GTEx data, and reference RNA-binding protein (RBP) expression levels across 53 GTEx tissues. The software outputs include:
+
+- Predicted splicing levels (PSI values) of the reference and variant alleles.
+- Predicted variant effects on splicing (ΔPSI) in GTEx tissue types.
+
+Additionally, iDARTS can make predictions based on user-provided RBP expression levels for specific sample types of interest. When a VCF file is not provided, iDARTS reports predicted splicing levels (PSI values) for AS events of interest.
 
 ### Predicting effects of variants on splicing
 -----------------

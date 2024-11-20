@@ -116,7 +116,7 @@ def parser(args):
     makedirs(outdir)
     resources_download_flag = check_resources_md5(outdir)
     if not resources_download_flag:
-        download_resources(args.out_dir)
+        download_resources(os.path.join(outdir, '..'))
         resources_download_flag = check_resources_md5(outdir)
     if resources_download_flag:
         logger.info('resources download successfully')
